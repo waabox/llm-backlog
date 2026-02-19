@@ -17,7 +17,7 @@ import {
 } from "../types/index.ts";
 import { normalizeAssignee } from "../utils/assignee.ts";
 import { openInEditor } from "../utils/editor.ts";
-import { buildIdRegex, getPrefixForType, normalizeId } from "../utils/prefix-config.ts";
+import { normalizeId } from "../utils/prefix-config.ts";
 import {
 	getCanonicalStatus as resolveCanonicalStatus,
 	getValidStatuses as resolveValidStatuses,
@@ -29,7 +29,7 @@ import {
 	normalizeStringList,
 	validateDependencies,
 } from "../utils/task-builders.ts";
-import { getTaskFilename, getTaskPath, normalizeTaskId, taskIdsEqual } from "../utils/task-path.ts";
+import { getTaskFilename, getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
 import {
 	addAcceptanceCriteria,
 	checkAcceptanceCriteria,
@@ -53,15 +53,13 @@ import {
 	updateDecisionFromContent,
 	updateDocument,
 } from "./entity-service.ts";
+import { generateNextId } from "./id-generation.ts";
 import { migrateDraftPrefixes, needsDraftPrefixMigration } from "./prefix-migration.ts";
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { SearchService } from "./search-service.ts";
 import { computeSequences, planMoveToSequence, planMoveToUnsequenced } from "./sequences.ts";
-import { type BranchTaskStateEntry, loadLocalBranchTasks, loadRemoteTasks } from "./task-loader.ts";
 import { applyTaskUpdateInput, normalizePriority, sanitizeArchivedTaskLinks } from "./task-mutation.ts";
 import {
-	buildLatestStateMap,
-	getActiveAndCompletedIdsFromStateMap,
 	getTask,
 	getTaskContent,
 	getTaskWithSubtasks,
@@ -261,148 +259,7 @@ export class Core {
 	 * - Decision: /decisions only
 	 */
 	async generateNextId(type: EntityType = EntityType.Task, parent?: string): Promise<string> {
-		const config = await this.fs.loadConfig();
-		const prefix = getPrefixForType(type, config ?? undefined);
-
-		// Collect existing IDs based on entity type
-		const allIds = await this.getExistingIdsForType(type);
-
-		if (parent) {
-			// Subtask generation (only applicable for tasks)
-			const normalizedParent = allIds.find((id) => taskIdsEqual(parent, id)) ?? normalizeTaskId(parent);
-			const upperParent = normalizedParent.toUpperCase();
-			let max = 0;
-			for (const id of allIds) {
-				// Case-insensitive comparison to handle legacy lowercase IDs
-				if (id.toUpperCase().startsWith(`${upperParent}.`)) {
-					const rest = id.slice(normalizedParent.length + 1);
-					const num = Number.parseInt(rest.split(".")[0] || "0", 10);
-					if (num > max) max = num;
-				}
-			}
-			const nextSubIdNumber = max + 1;
-			const padding = config?.zeroPaddedIds;
-
-			if (padding && padding > 0) {
-				const paddedSubId = String(nextSubIdNumber).padStart(2, "0");
-				return `${normalizedParent}.${paddedSubId}`;
-			}
-
-			return `${normalizedParent}.${nextSubIdNumber}`;
-		}
-
-		// Top-level ID generation using prefix-aware regex
-		const regex = buildIdRegex(prefix);
-		const upperPrefix = prefix.toUpperCase();
-		let max = 0;
-		for (const id of allIds) {
-			const match = id.match(regex);
-			if (match?.[1] && !match[1].includes(".")) {
-				const num = Number.parseInt(match[1], 10);
-				if (num > max) max = num;
-			}
-		}
-		const nextIdNumber = max + 1;
-		const padding = config?.zeroPaddedIds;
-
-		if (padding && padding > 0) {
-			const paddedId = String(nextIdNumber).padStart(padding, "0");
-			return `${upperPrefix}-${paddedId}`;
-		}
-
-		return `${upperPrefix}-${nextIdNumber}`;
-	}
-
-	/**
-	 * Gets all task IDs that are in use (active or completed) across all branches.
-	 * Respects cross-branch config settings. Archived IDs are excluded (can be reused).
-	 *
-	 * This is used for ID generation to determine the next available ID.
-	 */
-	private async getActiveAndCompletedTaskIds(): Promise<string[]> {
-		const config = await this.fs.loadConfig();
-
-		// Load local active and completed tasks
-		const localTasks = await this.listTasksWithMetadata();
-		const localCompletedTasks = await this.fs.listCompletedTasks();
-
-		// Build initial state entries from local tasks
-		const stateEntries: BranchTaskStateEntry[] = [];
-
-		// Add local active tasks to state
-		for (const task of localTasks) {
-			if (!task.id) continue;
-			const lastModified = task.lastModified ?? (task.updatedDate ? new Date(task.updatedDate) : new Date(0));
-			stateEntries.push({
-				id: task.id,
-				type: "task",
-				branch: "local",
-				path: "",
-				lastModified,
-			});
-		}
-
-		// Add local completed tasks to state
-		for (const task of localCompletedTasks) {
-			if (!task.id) continue;
-			const lastModified = task.updatedDate ? new Date(task.updatedDate) : new Date(0);
-			stateEntries.push({
-				id: task.id,
-				type: "completed",
-				branch: "local",
-				path: "",
-				lastModified,
-			});
-		}
-
-		// If cross-branch checking is enabled, scan other branches for task states
-		if (config?.checkActiveBranches !== false) {
-			const branchStateEntries: BranchTaskStateEntry[] = [];
-
-			// Load states from remote and local branches in parallel
-			await Promise.all([
-				loadRemoteTasks(this.git, config, undefined, localTasks, branchStateEntries),
-				loadLocalBranchTasks(this.git, config, undefined, localTasks, branchStateEntries),
-			]);
-
-			// Add branch state entries
-			stateEntries.push(...branchStateEntries);
-		}
-
-		// Build the latest state map and extract active + completed IDs
-		const latestState = buildLatestStateMap(stateEntries, []);
-		return getActiveAndCompletedIdsFromStateMap(latestState);
-	}
-
-	/**
-	 * Gets all existing IDs for a given entity type.
-	 * Used internally by generateNextId to determine the next available ID.
-	 *
-	 * Note: Archived tasks are intentionally excluded - archived IDs can be reused.
-	 * This makes archive act as a soft delete for ID purposes.
-	 */
-	private async getExistingIdsForType(type: EntityType): Promise<string[]> {
-		switch (type) {
-			case EntityType.Task: {
-				// Get active + completed task IDs from all branches (respects config)
-				// Archived IDs are excluded - they can be reused (soft delete behavior)
-				return this.getActiveAndCompletedTaskIds();
-			}
-			case EntityType.Draft: {
-				const drafts = await this.fs.listDrafts();
-				return drafts.map((d) => d.id);
-			}
-			case EntityType.Document: {
-				const documents = await this.fs.listDocuments();
-				return documents.map((d) => d.id);
-			}
-			case EntityType.Decision: {
-				const decisions = await this.fs.listDecisions();
-				return decisions.map((d) => d.id);
-			}
-			default:
-				return [];
-		}
+		return generateNextId(this, type, parent);
 	}
 
 	// High-level operations that combine filesystem and git
