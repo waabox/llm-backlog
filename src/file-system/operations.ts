@@ -1,7 +1,6 @@
 import { mkdir, rename, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { DEFAULT_DIRECTORIES, DEFAULT_FILES, DEFAULT_STATUSES } from "../constants/index.ts";
+import { DEFAULT_DIRECTORIES, DEFAULT_FILES } from "../constants/index.ts";
 import { parseDecision, parseDocument, parseMilestone, parseTask } from "../markdown/parser.ts";
 import { serializeDecision, serializeDocument, serializeTask } from "../markdown/serializer.ts";
 import type { BacklogConfig, Decision, Document, Milestone, Task, TaskListFilter } from "../types/index.ts";
@@ -15,6 +14,8 @@ import {
 } from "../utils/prefix-config.ts";
 import { getTaskFilename, getTaskPath, normalizeTaskIdentity } from "../utils/task-path.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
+import { ConfigStore } from "./config-store.ts";
+import { ensureDirectoryExists, sanitizeFilename } from "./shared.ts";
 
 // Interface for task path resolution context
 interface TaskPathContext {
@@ -26,60 +27,23 @@ interface TaskPathContext {
 export class FileSystem {
 	private readonly backlogDir: string;
 	private readonly projectRoot: string;
-	private cachedConfig: BacklogConfig | null = null;
+	private readonly configStore: ConfigStore;
+	private migrationChecked = false;
 
 	constructor(projectRoot: string) {
 		this.projectRoot = projectRoot;
 		this.backlogDir = join(projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
+		this.configStore = new ConfigStore(projectRoot, this.backlogDir);
 	}
 
 	private async getBacklogDir(): Promise<string> {
-		// Ensure migration is checked if needed
-		if (!this.cachedConfig) {
-			this.cachedConfig = await this.loadConfigDirect();
+		// Ensure legacy .backlog -> backlog migration is checked once
+		if (!this.migrationChecked) {
+			await this.configStore.loadConfigDirect();
+			this.migrationChecked = true;
 		}
 		// Always use "backlog" as the directory name - no configuration needed
 		return join(this.projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
-	}
-
-	private async loadConfigDirect(): Promise<BacklogConfig | null> {
-		try {
-			// First try the standard "backlog" directory
-			let configPath = join(this.projectRoot, DEFAULT_DIRECTORIES.BACKLOG, DEFAULT_FILES.CONFIG);
-			let file = Bun.file(configPath);
-			let exists = await file.exists();
-
-			// If not found, check for legacy ".backlog" directory and migrate it
-			if (!exists) {
-				const legacyBacklogDir = join(this.projectRoot, ".backlog");
-				const legacyConfigPath = join(legacyBacklogDir, DEFAULT_FILES.CONFIG);
-				const legacyFile = Bun.file(legacyConfigPath);
-				const legacyExists = await legacyFile.exists();
-
-				if (legacyExists) {
-					// Migrate legacy .backlog directory to backlog
-					const newBacklogDir = join(this.projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
-					await rename(legacyBacklogDir, newBacklogDir);
-
-					// Update paths to use the new location
-					configPath = join(this.projectRoot, DEFAULT_DIRECTORIES.BACKLOG, DEFAULT_FILES.CONFIG);
-					file = Bun.file(configPath);
-					exists = true;
-				}
-			}
-
-			if (!exists) {
-				return null;
-			}
-
-			const content = await file.text();
-			return this.parseConfig(content);
-		} catch (_error) {
-			if (process.env.DEBUG) {
-				console.error("Error loading config:", _error);
-			}
-			return null;
-		}
 	}
 
 	// Public accessors for directory paths
@@ -118,7 +82,7 @@ export class FileSystem {
 	}
 
 	invalidateConfigCache(): void {
-		this.cachedConfig = null;
+		this.configStore.invalidateConfigCache();
 	}
 
 	private async getTasksDir(): Promise<string> {
@@ -195,7 +159,7 @@ export class FileSystem {
 			prefix = config?.prefixes?.task ?? "task";
 		}
 		const taskId = normalizeId(task.id, prefix);
-		const filename = `${idForFilename(taskId)} - ${this.sanitizeFilename(task.title)}.md`;
+		const filename = `${idForFilename(taskId)} - ${sanitizeFilename(task.title)}.md`;
 		const tasksDir = await this.getTasksDir();
 		const filepath = join(tasksDir, filename);
 		// Normalize task ID and parentTaskId to uppercase before serialization
@@ -219,7 +183,7 @@ export class FileSystem {
 			// Ignore errors if no existing files found
 		}
 
-		await this.ensureDirectoryExists(dirname(filepath));
+		await ensureDirectoryExists(dirname(filepath));
 		await Bun.write(filepath, content);
 		return filepath;
 	}
@@ -374,7 +338,7 @@ export class FileSystem {
 			const targetPath = join(archiveTasksDir, taskFile);
 
 			// Ensure target directory exists
-			await this.ensureDirectoryExists(dirname(targetPath));
+			await ensureDirectoryExists(dirname(targetPath));
 
 			// Use rename for proper Git move detection
 			await rename(sourcePath, targetPath);
@@ -398,7 +362,7 @@ export class FileSystem {
 			const targetPath = join(completedDir, taskFile);
 
 			// Ensure target directory exists
-			await this.ensureDirectoryExists(dirname(targetPath));
+			await ensureDirectoryExists(dirname(targetPath));
 
 			// Use rename for proper Git move detection
 			await rename(sourcePath, targetPath);
@@ -428,7 +392,7 @@ export class FileSystem {
 			const targetPath = join(archiveDraftsDir, draftFile);
 
 			const content = await Bun.file(sourcePath).text();
-			await this.ensureDirectoryExists(dirname(targetPath));
+			await ensureDirectoryExists(dirname(targetPath));
 			await Bun.write(targetPath, content);
 
 			await unlink(sourcePath);
@@ -512,7 +476,7 @@ export class FileSystem {
 	// Draft operations
 	async saveDraft(task: Task): Promise<string> {
 		const draftId = normalizeId(task.id, "draft");
-		const filename = `${idForFilename(draftId)} - ${this.sanitizeFilename(task.title)}.md`;
+		const filename = `${idForFilename(draftId)} - ${sanitizeFilename(task.title)}.md`;
 		const draftsDir = await this.getDraftsDir();
 		const filepath = join(draftsDir, filename);
 		// Normalize the draft ID to uppercase before serialization
@@ -533,7 +497,7 @@ export class FileSystem {
 			// Ignore errors if no existing files found
 		}
 
-		await this.ensureDirectoryExists(dirname(filepath));
+		await ensureDirectoryExists(dirname(filepath));
 		await Bun.write(filepath, content);
 		return filepath;
 	}
@@ -586,7 +550,7 @@ export class FileSystem {
 	async saveDecision(decision: Decision): Promise<void> {
 		// Normalize ID - remove "decision-" prefix if present
 		const normalizedId = decision.id.replace(/^decision-/, "");
-		const filename = `decision-${normalizedId} - ${this.sanitizeFilename(decision.title)}.md`;
+		const filename = `decision-${normalizedId} - ${sanitizeFilename(decision.title)}.md`;
 		const decisionsDir = await this.getDecisionsDir();
 		const filepath = join(decisionsDir, filename);
 		const content = serializeDecision(decision);
@@ -604,7 +568,7 @@ export class FileSystem {
 			}
 		}
 
-		await this.ensureDirectoryExists(dirname(filepath));
+		await ensureDirectoryExists(dirname(filepath));
 		await Bun.write(filepath, content);
 	}
 
@@ -634,7 +598,7 @@ export class FileSystem {
 		const docsDir = await this.getDocsDir();
 		const canonicalId = normalizeDocumentId(document.id);
 		document.id = canonicalId;
-		const filename = `${canonicalId} - ${this.sanitizeFilename(document.title)}.md`;
+		const filename = `${canonicalId} - ${sanitizeFilename(document.title)}.md`;
 		const subPathSegments = subPath
 			.split(/[\\/]+/)
 			.map((segment) => segment.trim())
@@ -643,7 +607,7 @@ export class FileSystem {
 		const filepath = join(docsDir, relativePath);
 		const content = serializeDocument(document);
 
-		await this.ensureDirectoryExists(dirname(filepath));
+		await ensureDirectoryExists(dirname(filepath));
 
 		const glob = new Bun.Glob("**/doc-*.md");
 		const existingMatches = await Array.fromAsync(glob.scan({ cwd: docsDir, followSymlinks: true }));
@@ -662,7 +626,7 @@ export class FileSystem {
 		if (sourceRelativePath && sourceRelativePath !== relativePath) {
 			const sourcePath = join(docsDir, sourceRelativePath);
 			try {
-				await this.ensureDirectoryExists(dirname(filepath));
+				await ensureDirectoryExists(dirname(filepath));
 				await rename(sourcePath, filepath);
 			} catch (error) {
 				const code = (error as NodeJS.ErrnoException | undefined)?.code;
@@ -1112,7 +1076,7 @@ ${description || `Milestone: ${title}`}`,
 
 			const archiveDir = await this.getArchiveMilestonesDir();
 			const targetPath = join(archiveDir, milestoneMatch.file);
-			await this.ensureDirectoryExists(dirname(targetPath));
+			await ensureDirectoryExists(dirname(targetPath));
 			await rename(milestoneMatch.filepath, targetPath);
 
 			return {
@@ -1126,271 +1090,25 @@ ${description || `Milestone: ${title}`}`,
 		}
 	}
 
-	// Config operations
+	// Config operations - delegated to ConfigStore
 	async loadConfig(): Promise<BacklogConfig | null> {
-		// Return cached config if available
-		if (this.cachedConfig !== null) {
-			return this.cachedConfig;
+		// Ensure legacy migration is checked before reading config
+		if (!this.migrationChecked) {
+			await this.configStore.loadConfigDirect();
+			this.migrationChecked = true;
 		}
-
-		try {
-			const backlogDir = await this.getBacklogDir();
-			const configPath = join(backlogDir, DEFAULT_FILES.CONFIG);
-
-			// Check if file exists first to avoid hanging on Windows
-			const file = Bun.file(configPath);
-			const exists = await file.exists();
-
-			if (!exists) {
-				return null;
-			}
-
-			const content = await file.text();
-			const config = this.parseConfig(content);
-
-			// Cache the loaded config
-			this.cachedConfig = config;
-			return config;
-		} catch (_error) {
-			return null;
-		}
+		return this.configStore.loadConfig();
 	}
 
 	async saveConfig(config: BacklogConfig): Promise<void> {
-		const backlogDir = await this.getBacklogDir();
-		const configPath = join(backlogDir, DEFAULT_FILES.CONFIG);
-		const content = this.serializeConfig(config);
-		await Bun.write(configPath, content);
-		this.cachedConfig = config;
+		return this.configStore.saveConfig(config);
 	}
 
 	async getUserSetting(key: string, global = false): Promise<string | undefined> {
-		const settings = await this.loadUserSettings(global);
-		return settings ? settings[key] : undefined;
+		return this.configStore.getUserSetting(key, global);
 	}
 
 	async setUserSetting(key: string, value: string, global = false): Promise<void> {
-		const settings = (await this.loadUserSettings(global)) || {};
-		settings[key] = value;
-		await this.saveUserSettings(settings, global);
-	}
-
-	private async loadUserSettings(global = false): Promise<Record<string, string> | null> {
-		const primaryPath = global
-			? join(homedir(), "backlog", DEFAULT_FILES.USER)
-			: join(this.projectRoot, DEFAULT_FILES.USER);
-		const fallbackPath = global ? join(this.projectRoot, "backlog", DEFAULT_FILES.USER) : undefined;
-		const tryPaths = fallbackPath ? [primaryPath, fallbackPath] : [primaryPath];
-		for (const filePath of tryPaths) {
-			try {
-				const content = await Bun.file(filePath).text();
-				const result: Record<string, string> = {};
-				for (const line of content.split(/\r?\n/)) {
-					const trimmed = line.trim();
-					if (!trimmed || trimmed.startsWith("#")) continue;
-					const idx = trimmed.indexOf(":");
-					if (idx === -1) continue;
-					const k = trimmed.substring(0, idx).trim();
-					result[k] = trimmed
-						.substring(idx + 1)
-						.trim()
-						.replace(/^['"]|['"]$/g, "");
-				}
-				return result;
-			} catch {
-				// Try next path (if any)
-			}
-		}
-		return null;
-	}
-
-	private async saveUserSettings(settings: Record<string, string>, global = false): Promise<void> {
-		const primaryPath = global
-			? join(homedir(), "backlog", DEFAULT_FILES.USER)
-			: join(this.projectRoot, DEFAULT_FILES.USER);
-		const fallbackPath = global ? join(this.projectRoot, "backlog", DEFAULT_FILES.USER) : undefined;
-
-		const lines = Object.entries(settings).map(([k, v]) => `${k}: ${v}`);
-		const data = `${lines.join("\n")}\n`;
-
-		try {
-			await this.ensureDirectoryExists(dirname(primaryPath));
-			await Bun.write(primaryPath, data);
-			return;
-		} catch {
-			// Fall through to fallback when global write fails (e.g., sandboxed env)
-		}
-
-		if (fallbackPath) {
-			await this.ensureDirectoryExists(dirname(fallbackPath));
-			await Bun.write(fallbackPath, data);
-		}
-	}
-
-	// Utility methods
-	private sanitizeFilename(filename: string): string {
-		// Remove path-unsafe characters, then strip noisy punctuation before normalizing whitespace
-		return (
-			filename
-				.replace(/[<>:"/\\|?*]/g, "-")
-				// biome-ignore lint/complexity/noUselessEscapeInRegex: we need explicit escapes inside the character class
-				.replace(/['(),!@#$%^&+=\[\]{};]/g, "")
-				.replace(/\s+/g, "-")
-				.replace(/-+/g, "-")
-				.replace(/^-|-$/g, "")
-		);
-	}
-
-	private async ensureDirectoryExists(dirPath: string): Promise<void> {
-		try {
-			await mkdir(dirPath, { recursive: true });
-		} catch (_error) {
-			// Directory creation failed, ignore
-		}
-	}
-
-	private parseConfig(content: string): BacklogConfig {
-		const config: Partial<BacklogConfig> = {};
-		const lines = content.split("\n");
-
-		for (const line of lines) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith("#")) continue;
-
-			const colonIndex = trimmed.indexOf(":");
-			if (colonIndex === -1) continue;
-
-			const key = trimmed.substring(0, colonIndex).trim();
-			const value = trimmed.substring(colonIndex + 1).trim();
-
-			switch (key) {
-				case "project_name":
-					config.projectName = value.replace(/['"]/g, "");
-					break;
-				case "default_assignee":
-					config.defaultAssignee = value.replace(/['"]/g, "");
-					break;
-				case "default_reporter":
-					config.defaultReporter = value.replace(/['"]/g, "");
-					break;
-				case "default_status":
-					config.defaultStatus = value.replace(/['"]/g, "");
-					break;
-				case "statuses":
-				case "labels":
-					if (value.startsWith("[") && value.endsWith("]")) {
-						const arrayContent = value.slice(1, -1);
-						config[key] = arrayContent
-							.split(",")
-							.map((item) => item.trim().replace(/['"]/g, ""))
-							.filter(Boolean);
-					}
-					break;
-				case "definition_of_done":
-					if (value.startsWith("[") && value.endsWith("]")) {
-						const arrayContent = value.slice(1, -1);
-						config.definitionOfDone = arrayContent
-							.split(",")
-							.map((item) => item.trim().replace(/['"]/g, ""))
-							.filter(Boolean);
-					}
-					break;
-				case "date_format":
-					config.dateFormat = value.replace(/['"]/g, "");
-					break;
-				case "max_column_width":
-					config.maxColumnWidth = Number.parseInt(value, 10);
-					break;
-				case "default_editor":
-					config.defaultEditor = value.replace(/["']/g, "");
-					break;
-				case "auto_open_browser":
-					config.autoOpenBrowser = value.toLowerCase() === "true";
-					break;
-				case "default_port":
-					config.defaultPort = Number.parseInt(value, 10);
-					break;
-				case "remote_operations":
-					config.remoteOperations = value.toLowerCase() === "true";
-					break;
-				case "auto_commit":
-					config.autoCommit = value.toLowerCase() === "true";
-					break;
-				case "zero_padded_ids":
-					config.zeroPaddedIds = Number.parseInt(value, 10);
-					break;
-				case "bypass_git_hooks":
-					config.bypassGitHooks = value.toLowerCase() === "true";
-					break;
-				case "check_active_branches":
-					config.checkActiveBranches = value.toLowerCase() === "true";
-					break;
-				case "active_branch_days":
-					config.activeBranchDays = Number.parseInt(value, 10);
-					break;
-				case "onStatusChange":
-				case "on_status_change":
-					// Remove surrounding quotes if present, but preserve inner content
-					config.onStatusChange = value.replace(/^['"]|['"]$/g, "");
-					break;
-				case "task_prefix":
-					config.prefixes = { task: value.replace(/['"]/g, "") };
-					break;
-			}
-		}
-
-		return {
-			projectName: config.projectName || "",
-			defaultAssignee: config.defaultAssignee,
-			defaultReporter: config.defaultReporter,
-			statuses: config.statuses || [...DEFAULT_STATUSES],
-			labels: config.labels || [],
-			definitionOfDone: config.definitionOfDone,
-			defaultStatus: config.defaultStatus,
-			dateFormat: config.dateFormat || "yyyy-mm-dd",
-			maxColumnWidth: config.maxColumnWidth,
-			defaultEditor: config.defaultEditor,
-			autoOpenBrowser: config.autoOpenBrowser,
-			defaultPort: config.defaultPort,
-			remoteOperations: config.remoteOperations,
-			autoCommit: config.autoCommit,
-			zeroPaddedIds: config.zeroPaddedIds,
-			bypassGitHooks: config.bypassGitHooks,
-			checkActiveBranches: config.checkActiveBranches,
-			activeBranchDays: config.activeBranchDays,
-			onStatusChange: config.onStatusChange,
-			prefixes: config.prefixes,
-		};
-	}
-
-	private serializeConfig(config: BacklogConfig): string {
-		const lines = [
-			`project_name: "${config.projectName}"`,
-			...(config.defaultAssignee ? [`default_assignee: "${config.defaultAssignee}"`] : []),
-			...(config.defaultReporter ? [`default_reporter: "${config.defaultReporter}"`] : []),
-			...(config.defaultStatus ? [`default_status: "${config.defaultStatus}"`] : []),
-			`statuses: [${config.statuses.map((s) => `"${s}"`).join(", ")}]`,
-			`labels: [${config.labels.map((l) => `"${l}"`).join(", ")}]`,
-			...(Array.isArray(config.definitionOfDone)
-				? [`definition_of_done: [${config.definitionOfDone.map((item) => `"${item}"`).join(", ")}]`]
-				: []),
-			`date_format: ${config.dateFormat}`,
-			...(config.maxColumnWidth ? [`max_column_width: ${config.maxColumnWidth}`] : []),
-			...(config.defaultEditor ? [`default_editor: "${config.defaultEditor}"`] : []),
-			...(typeof config.autoOpenBrowser === "boolean" ? [`auto_open_browser: ${config.autoOpenBrowser}`] : []),
-			...(config.defaultPort ? [`default_port: ${config.defaultPort}`] : []),
-			...(typeof config.remoteOperations === "boolean" ? [`remote_operations: ${config.remoteOperations}`] : []),
-			...(typeof config.autoCommit === "boolean" ? [`auto_commit: ${config.autoCommit}`] : []),
-			...(typeof config.zeroPaddedIds === "number" ? [`zero_padded_ids: ${config.zeroPaddedIds}`] : []),
-			...(typeof config.bypassGitHooks === "boolean" ? [`bypass_git_hooks: ${config.bypassGitHooks}`] : []),
-			...(typeof config.checkActiveBranches === "boolean"
-				? [`check_active_branches: ${config.checkActiveBranches}`]
-				: []),
-			...(typeof config.activeBranchDays === "number" ? [`active_branch_days: ${config.activeBranchDays}`] : []),
-			...(config.onStatusChange ? [`onStatusChange: '${config.onStatusChange}'`] : []),
-			...(config.prefixes?.task ? [`task_prefix: "${config.prefixes.task}"`] : []),
-		];
-
-		return `${lines.join("\n")}\n`;
+		return this.configStore.setUserSetting(key, value, global);
 	}
 }
