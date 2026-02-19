@@ -80,7 +80,39 @@ src/
 
 - **Runtime**: Bun + TypeScript 5
 - **Formatting**: Biome, tab indentation, double quotes
-- **Pre-commit**: Husky + lint-staged runs `biome check --write` on staged files
+
+## Testing
+
+One integration test file: `src/test/integration.test.ts`. No unit tests.
+
+**Two git repos per test suite:**
+- **Config repo** (`tmp/cfg-repo-*`): local git repo with `users.md` containing mock users and API keys. Used as `AUTH_CONFIG_REPO` so `ConfigRepoService` clones it and enables MCP auth.
+- **Project repo** (`tmp/proj-repo-*`): local git repo with a full backlog structure and mock data (tasks, milestones, decisions, docs, config.yml).
+
+**What to test:** HTTP endpoints and MCP protocol only — black box. No internal classes.
+- REST endpoints via `fetch()` with `Authorization: Bearer <api-key>`
+- MCP via `POST /mcp` with JSON-RPC 2.0 payloads
+- Git state: verify commits were created and files are tracked after mutations
+
+**Setup pattern:**
+```typescript
+async function startTestEnv(): Promise<TestEnv> {
+  await buildConfigRepo(configDir);   // git init + users.md
+  await buildProjectRepo(projectDir); // git init + mock backlog data
+  process.env.AUTH_CONFIG_REPO = configDir;
+  const server = new BacklogServer(projectDir);
+  await server.start(port, false);    // false = no browser
+  ...
+}
+```
+
+**MCP tool names:** `task_create`, `task_list`, `task_edit`, `task_view`, `task_archive`, `task_complete`, `task_search`.
+
+**Notes:**
+- REST auth requires Google OAuth (`GOOGLE_CLIENT_ID` + `AUTH_CONFIG_REPO`) — not tested here.
+- MCP auth works with API key only (`AUTH_CONFIG_REPO` alone).
+- `handleCreateMilestone` calls `core.filesystem.createMilestone()` directly — no auto-commit.
+- Task/decision/doc mutations via `core.*` methods do auto-commit when `auto_commit: true`.
 
 ## MCP Architecture
 
