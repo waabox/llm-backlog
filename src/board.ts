@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { buildMilestoneAliasMap, canonicalizeMilestoneValue, getMilestoneLabel } from "./core/milestones.ts";
 import type { Milestone, Task } from "./types/index.ts";
 
 export interface BoardOptions {
@@ -186,75 +187,25 @@ export function generateMilestoneGroupedBoard(
 	const now = new Date();
 	const timestamp = now.toISOString().replace("T", " ").substring(0, 19);
 
-	// Collect canonical milestone identifiers from milestone files and tasks.
-	// Task values can be either IDs or titles, so normalize aliases to one key.
+	const aliasMap = buildMilestoneAliasMap(milestoneEntities);
+	const canonicalizeMilestone = (value?: string | null): string => canonicalizeMilestoneValue(value ?? null, aliasMap);
+
 	const milestoneSeen = new Set<string>();
 	const allMilestones: string[] = [];
-	const aliasToMilestone = new Map<string, string>();
-	const milestoneLabelsByKey = new Map<string, string>();
-	const titleCounts = new Map<string, number>();
-	for (const milestone of milestoneEntities) {
-		const titleKey = milestone.title.trim().toLowerCase();
-		if (!titleKey) continue;
-		titleCounts.set(titleKey, (titleCounts.get(titleKey) ?? 0) + 1);
-	}
 
 	for (const milestone of milestoneEntities) {
-		const normalizedId = milestone.id.trim();
-		const normalizedTitle = milestone.title.trim();
-		const idKey = normalizedId.toLowerCase();
-		if (normalizedId && !milestoneSeen.has(idKey)) {
-			milestoneSeen.add(idKey);
-			allMilestones.push(normalizedId);
-		}
-
-		if (normalizedId) {
-			aliasToMilestone.set(idKey, normalizedId);
-			const idAliasMatch = normalizedId.match(/^m-(\d+)$/i);
-			if (idAliasMatch?.[1]) {
-				const numericAlias = String(Number.parseInt(idAliasMatch[1], 10));
-				aliasToMilestone.set(`m-${numericAlias}`, normalizedId);
-				if (!aliasToMilestone.has(numericAlias)) {
-					aliasToMilestone.set(numericAlias, normalizedId);
-				}
-			}
-		}
-		if (normalizedTitle) {
-			const titleKey = normalizedTitle.toLowerCase();
-			if (titleCounts.get(titleKey) === 1 && !aliasToMilestone.has(titleKey)) {
-				aliasToMilestone.set(titleKey, normalizedId || normalizedTitle);
-			}
-			milestoneLabelsByKey.set(idKey, normalizedTitle);
-			if (titleCounts.get(titleKey) === 1 && !milestoneLabelsByKey.has(titleKey)) {
-				milestoneLabelsByKey.set(titleKey, normalizedTitle);
-			}
+		const id = milestone.id.trim();
+		if (id && !milestoneSeen.has(id.toLowerCase())) {
+			milestoneSeen.add(id.toLowerCase());
+			allMilestones.push(id);
 		}
 	}
-
-	const canonicalizeMilestone = (value?: string | null): string => {
-		const normalized = value?.trim();
-		if (!normalized) return "";
-		const direct = aliasToMilestone.get(normalized.toLowerCase());
-		if (direct) {
-			return direct;
-		}
-		const idMatch = normalized.match(/^m-(\d+)$/i);
-		if (idMatch?.[1]) {
-			const numericAlias = String(Number.parseInt(idMatch[1], 10));
-			return aliasToMilestone.get(`m-${numericAlias}`) ?? aliasToMilestone.get(numericAlias) ?? normalized;
-		}
-		if (/^\d+$/.test(normalized)) {
-			const numericAlias = String(Number.parseInt(normalized, 10));
-			return aliasToMilestone.get(`m-${numericAlias}`) ?? aliasToMilestone.get(numericAlias) ?? normalized;
-		}
-		return normalized;
-	};
 
 	for (const task of tasks) {
-		const canonicalMilestone = canonicalizeMilestone(task.milestone);
-		if (canonicalMilestone && !milestoneSeen.has(canonicalMilestone.toLowerCase())) {
-			milestoneSeen.add(canonicalMilestone.toLowerCase());
-			allMilestones.push(canonicalMilestone);
+		const canonical = canonicalizeMilestone(task.milestone);
+		if (canonical && !milestoneSeen.has(canonical.toLowerCase())) {
+			milestoneSeen.add(canonical.toLowerCase());
+			allMilestones.push(canonical);
 		}
 	}
 
@@ -278,7 +229,7 @@ Project: ${projectName}
 			(task) => canonicalizeMilestone(task.milestone).toLowerCase() === milestone.toLowerCase(),
 		);
 		if (milestoneTasks.length > 0) {
-			const milestoneLabel = milestoneLabelsByKey.get(milestone.toLowerCase()) ?? milestone;
+			const milestoneLabel = getMilestoneLabel(milestone, milestoneEntities);
 			sections.push(generateMilestoneSection(milestoneLabel, milestoneTasks, statuses));
 		}
 	}

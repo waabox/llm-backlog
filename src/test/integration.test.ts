@@ -8,11 +8,11 @@
  * endpoints and the MCP protocol, and validates response payloads plus git state.
  */
 
-import { $ } from "bun";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { $ } from "bun";
 import { BacklogServer } from "../server/index.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -276,7 +276,7 @@ describe("REST API — tasks", () => {
 		const res = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const tasks = Array.isArray(body) ? body : (body.tasks ?? body.data ?? []);
 		expect(tasks.length).toBeGreaterThanOrEqual(2);
 		// IDs are normalised to uppercase prefix by the server
 		const titles = tasks.map((t: { title: string }) => t.title);
@@ -288,7 +288,7 @@ describe("REST API — tasks", () => {
 		// List first to get the real server-assigned ID
 		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
 		const body = await listRes.json();
-		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const tasks = Array.isArray(body) ? body : (body.tasks ?? body.data ?? []);
 		const task1 = tasks.find((t: { title: string }) => t.title === "Initial Task");
 		expect(task1).toBeTruthy();
 
@@ -325,7 +325,7 @@ describe("REST API — tasks", () => {
 		// Get task-2's real ID from the list
 		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
 		const body = await listRes.json();
-		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const tasks = Array.isArray(body) ? body : (body.tasks ?? body.data ?? []);
 		const task2 = tasks.find((t: { title: string }) => t.title === "Second Task");
 		expect(task2).toBeTruthy();
 
@@ -343,7 +343,7 @@ describe("REST API — tasks", () => {
 		// Get real ID for Initial Task
 		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
 		const body = await listRes.json();
-		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const tasks = Array.isArray(body) ? body : (body.tasks ?? body.data ?? []);
 		const task1 = tasks.find((t: { title: string }) => t.title === "Initial Task");
 		expect(task1).toBeTruthy();
 
@@ -356,15 +356,13 @@ describe("REST API — tasks", () => {
 		// task-1 should no longer appear in the active list
 		const listRes2 = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
 		const body2 = await listRes2.json();
-		const activeTasks = Array.isArray(body2) ? body2 : body2.tasks ?? body2.data ?? [];
+		const activeTasks = Array.isArray(body2) ? body2 : (body2.tasks ?? body2.data ?? []);
 		const activeTitles = activeTasks.map((t: { title: string }) => t.title);
 		expect(activeTitles).not.toContain("Initial Task");
 
 		// file must exist under completed/ in git
 		const tracked = await gitTrackedFiles(env.projectDir);
-		expect(tracked.some((f) => f.includes("completed") && f.toLowerCase().includes(task1.id.toLowerCase()))).toBe(
-			true,
-		);
+		expect(tracked.some((f) => f.includes("completed") && f.toLowerCase().includes(task1.id.toLowerCase()))).toBe(true);
 	});
 });
 

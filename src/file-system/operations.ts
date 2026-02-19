@@ -35,12 +35,8 @@ export class FileSystem {
 			join(this.backlogDir, DEFAULT_DIRECTORIES.DRAFTS),
 			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_DRAFTS),
 		);
-		this.decisionStore = new DecisionStore(
-			join(this.backlogDir, DEFAULT_DIRECTORIES.DECISIONS),
-		);
-		this.documentStore = new DocumentStore(
-			join(this.backlogDir, DEFAULT_DIRECTORIES.DOCS),
-		);
+		this.decisionStore = new DecisionStore(join(this.backlogDir, DEFAULT_DIRECTORIES.DECISIONS));
+		this.documentStore = new DocumentStore(join(this.backlogDir, DEFAULT_DIRECTORIES.DOCS));
 		this.milestoneStore = new MilestoneStore(
 			join(this.backlogDir, DEFAULT_DIRECTORIES.MILESTONES),
 			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_MILESTONES),

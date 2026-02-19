@@ -311,13 +311,10 @@ ${rawContent.trim()}
 				: null;
 
 		const dir = scope === "archived" ? this.archiveMilestonesDir : this.milestonesDir;
-		const milestoneFiles = await Array.fromAsync(
-			new Bun.Glob("m-*.md").scan({ cwd: dir, followSymlinks: true }),
-		);
+		const milestoneFiles = await Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: dir, followSymlinks: true }));
 
 		const rawExactIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const canonicalRawIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> =
-			[];
+		const canonicalRawIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
 		const exactAliasIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
 		const exactTitleMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
 		const variantIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
