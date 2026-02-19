@@ -29,138 +29,7 @@ import { useHealthCheckContext } from './contexts/HealthCheckContext';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import { getWebVersion } from './utils/version';
-import { collectArchivedMilestoneKeys, collectMilestoneIds, milestoneKey } from './utils/milestones';
-
-const buildMilestoneAliasMap = (milestones: Milestone[], archivedMilestones: Milestone[]): Map<string, string> => {
-  const aliasMap = new Map<string, string>();
-  const collectIdAliasKeys = (value: string): string[] => {
-    const normalized = value.trim();
-    const normalizedKey = normalized.toLowerCase();
-    if (!normalizedKey) return [];
-    const keys = new Set<string>([normalizedKey]);
-    if (/^\d+$/.test(normalized)) {
-      const numericAlias = String(Number.parseInt(normalized, 10));
-      keys.add(numericAlias);
-      keys.add(`m-${numericAlias}`);
-      return Array.from(keys);
-    }
-    const idMatch = normalized.match(/^m-(\d+)$/i);
-    if (idMatch?.[1]) {
-      const numericAlias = String(Number.parseInt(idMatch[1], 10));
-      keys.add(`m-${numericAlias}`);
-      keys.add(numericAlias);
-    }
-    return Array.from(keys);
-  };
-  const reservedIdKeys = new Set<string>();
-  for (const milestone of [...milestones, ...archivedMilestones]) {
-    for (const key of collectIdAliasKeys(milestone.id)) {
-      reservedIdKeys.add(key);
-    }
-  }
-  const setAlias = (aliasKey: string, id: string, allowOverwrite: boolean) => {
-    const existing = aliasMap.get(aliasKey);
-    if (!existing) {
-      aliasMap.set(aliasKey, id);
-      return;
-    }
-    if (!allowOverwrite) {
-      return;
-    }
-    const existingKey = existing.toLowerCase();
-    const nextKey = id.toLowerCase();
-    const preferredRawId = /^\d+$/.test(aliasKey) ? `m-${aliasKey}` : /^m-\d+$/.test(aliasKey) ? aliasKey : null;
-    if (preferredRawId) {
-      const existingIsPreferred = existingKey === preferredRawId;
-      const nextIsPreferred = nextKey === preferredRawId;
-      if (existingIsPreferred && !nextIsPreferred) {
-        return;
-      }
-      if (nextIsPreferred && !existingIsPreferred) {
-        aliasMap.set(aliasKey, id);
-      }
-      return;
-    }
-    aliasMap.set(aliasKey, id);
-  };
-  const addIdAliases = (id: string, allowOverwrite = true) => {
-    const idKey = id.toLowerCase();
-    setAlias(idKey, id, allowOverwrite);
-    const idMatch = id.match(/^m-(\d+)$/i);
-    if (!idMatch?.[1]) return;
-    const numericAlias = String(Number.parseInt(idMatch[1], 10));
-    const canonicalId = `m-${numericAlias}`;
-    setAlias(canonicalId, id, allowOverwrite);
-    setAlias(numericAlias, id, allowOverwrite);
-  };
-  const activeTitleCounts = new Map<string, number>();
-  for (const milestone of milestones) {
-    const title = milestone.title.trim();
-    if (!title) continue;
-    const titleKey = title.toLowerCase();
-    activeTitleCounts.set(titleKey, (activeTitleCounts.get(titleKey) ?? 0) + 1);
-  }
-  const activeTitleKeys = new Set(activeTitleCounts.keys());
-
-  for (const milestone of milestones) {
-    const id = milestone.id.trim();
-    const title = milestone.title.trim();
-    if (!id) continue;
-    addIdAliases(id);
-    if (title && !reservedIdKeys.has(title.toLowerCase()) && activeTitleCounts.get(title.toLowerCase()) === 1) {
-      const titleKey = title.toLowerCase();
-      if (!aliasMap.has(titleKey)) {
-        aliasMap.set(titleKey, id);
-      }
-    }
-  }
-
-  const archivedTitleCounts = new Map<string, number>();
-  for (const milestone of archivedMilestones) {
-    const title = milestone.title.trim();
-    if (!title) continue;
-    const titleKey = title.toLowerCase();
-    if (activeTitleKeys.has(titleKey)) continue;
-    archivedTitleCounts.set(titleKey, (archivedTitleCounts.get(titleKey) ?? 0) + 1);
-  }
-  for (const milestone of archivedMilestones) {
-    const id = milestone.id.trim();
-    const title = milestone.title.trim();
-    if (!id) continue;
-    addIdAliases(id, false);
-    const titleKey = title.toLowerCase();
-    if (
-      title &&
-      !activeTitleKeys.has(titleKey) &&
-      !reservedIdKeys.has(titleKey) &&
-      archivedTitleCounts.get(titleKey) === 1
-    ) {
-      if (!aliasMap.has(titleKey)) {
-        aliasMap.set(titleKey, id);
-      }
-    }
-  }
-  return aliasMap;
-};
-
-const canonicalizeMilestone = (value: string | null | undefined, aliasMap?: Map<string, string>): string => {
-  const normalized = (value ?? '').trim();
-  if (!normalized) return '';
-  const direct = aliasMap?.get(milestoneKey(normalized));
-  if (direct) {
-    return direct;
-  }
-  const idMatch = normalized.match(/^m-(\d+)$/i);
-  if (idMatch?.[1]) {
-    const numericAlias = String(Number.parseInt(idMatch[1], 10));
-    return aliasMap?.get(`m-${numericAlias}`) ?? aliasMap?.get(numericAlias) ?? normalized;
-  }
-  if (/^\d+$/.test(normalized)) {
-    const numericAlias = String(Number.parseInt(normalized, 10));
-    return aliasMap?.get(`m-${numericAlias}`) ?? aliasMap?.get(numericAlias) ?? normalized;
-  }
-  return normalized;
-};
+import { buildMilestoneAliasMap, canonicalizeMilestoneValue, collectArchivedMilestoneKeys, collectMilestoneIds, milestoneKey } from './utils/milestones';
 
 function App() {
   const [showModal, setShowModal] = useState(false);
@@ -227,10 +96,11 @@ function App() {
     const decisionResults = results.filter((result): result is DecisionSearchResult => result.type === 'decision');
 
     const tasksList = taskResults.map((result) => result.task);
+    const aliases = milestoneAliases ?? new Map<string, string>();
     const normalizedTasks =
       archivedMilestoneKeys && archivedMilestoneKeys.size > 0
         ? tasksList.map((task) => {
-            const canonicalMilestone = canonicalizeMilestone(task.milestone, milestoneAliases);
+            const canonicalMilestone = canonicalizeMilestoneValue(task.milestone, aliases);
             const key = milestoneKey(canonicalMilestone);
             if (!key || !archivedMilestoneKeys.has(key)) {
               if (task.milestone === canonicalMilestone) {
@@ -241,7 +111,7 @@ function App() {
             return { ...task, milestone: undefined };
           })
         : tasksList.map((task) => {
-            const canonicalMilestone = canonicalizeMilestone(task.milestone, milestoneAliases);
+            const canonicalMilestone = canonicalizeMilestoneValue(task.milestone, aliases);
             if (task.milestone === canonicalMilestone) {
               return task;
             }
