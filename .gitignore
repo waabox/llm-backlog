@@ -61,6 +61,7 @@ tmp/
 
 # Local files
 *.local.*
+run.sh
 
 # Performance benchmark artifacts
 test-benchmark-report.json

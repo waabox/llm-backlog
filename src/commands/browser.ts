@@ -15,14 +15,21 @@ export function registerBrowserCommand(program: Command): void {
 		.option("--no-open", "don't automatically open browser")
 		.action(async (options) => {
 			try {
-				const cwd = await requireProjectRoot();
+				const remoteRepo = process.env.BACKLOG_PROJECT_REPO ?? null;
+				// When BACKLOG_PROJECT_REPO is set, skip local root check —
+				// the server will clone the remote repo and use that as the project root.
+				const cwd = remoteRepo ? process.cwd() : await requireProjectRoot();
 				const { BacklogServer } = await import("../server/index.ts");
 				const server = new BacklogServer(cwd);
 
-				// Load config to get default port
-				const core = new Core(cwd);
-				const config = await core.filesystem.loadConfig();
-				const defaultPort = config?.defaultPort ?? 6420;
+				// Load config to get default port — only meaningful when using a local project.
+				// With a remote repo the server picks up the port from the cloned config in start().
+				let defaultPort = 6420;
+				if (!remoteRepo) {
+					const core = new Core(cwd);
+					const config = await core.filesystem.loadConfig();
+					defaultPort = config?.defaultPort ?? 6420;
+				}
 
 				const port = Number.parseInt(options.port || defaultPort.toString(), 10);
 				if (Number.isNaN(port) || port < 1 || port > 65535) {

@@ -112,6 +112,7 @@ export class Core {
 	contentStore?: ContentStore;
 	private searchService?: SearchService;
 	private readonly enableWatchers: boolean;
+	private autoCommitOverride: boolean | null = null;
 
 	constructor(projectRoot: string, options?: { enableWatchers?: boolean }) {
 		this.fs = new FileSystem(projectRoot);
@@ -120,6 +121,15 @@ export class Core {
 		// Interactive modes (TUI, browser, MCP) should explicitly pass enableWatchers: true
 		this.enableWatchers = options?.enableWatchers ?? false;
 		// Note: Config is loaded lazily when needed since constructor can't be async
+	}
+
+	/**
+	 * Overrides the auto-commit setting from config for this Core instance.
+	 * Used by BacklogServer when running with a remote project repo to ensure
+	 * every task mutation is committed and pushed.
+	 */
+	setAutoCommitOverride(value: boolean): void {
+		this.autoCommitOverride = value;
 	}
 
 	async getContentStore(): Promise<ContentStore> {
@@ -221,6 +231,10 @@ export class Core {
 		// If override is explicitly provided, use it
 		if (overrideValue !== undefined) {
 			return overrideValue;
+		}
+		// Instance-level override takes precedence over config
+		if (this.autoCommitOverride !== null) {
+			return this.autoCommitOverride;
 		}
 		// Otherwise, check config (default to false for safety)
 		const config = await this.fs.loadConfig();

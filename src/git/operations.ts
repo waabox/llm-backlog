@@ -11,6 +11,7 @@ type GitPathContext = {
 export class GitOperations {
 	private projectRoot: string;
 	private config: BacklogConfig | null = null;
+	private autoPush = false;
 
 	constructor(projectRoot: string, config: BacklogConfig | null = null) {
 		this.projectRoot = projectRoot;
@@ -19,6 +20,10 @@ export class GitOperations {
 
 	setConfig(config: BacklogConfig | null): void {
 		this.config = config;
+	}
+
+	setAutoPush(enabled: boolean): void {
+		this.autoPush = enabled;
 	}
 
 	async addFile(filePath: string): Promise<void> {
@@ -47,6 +52,7 @@ export class GitOperations {
 		}
 		const repoRoot = filePath ? (await this.getPathContext(filePath))?.repoRoot : undefined;
 		await this.execGit(args, { cwd: repoRoot });
+		await this.pushIfEnabled(repoRoot);
 	}
 
 	async commitChanges(message: string, repoRoot?: string | null): Promise<void> {
@@ -55,6 +61,7 @@ export class GitOperations {
 			args.push("--no-verify");
 		}
 		await this.execGit(args, { cwd: repoRoot ?? undefined });
+		await this.pushIfEnabled(repoRoot);
 	}
 
 	async commitFiles(message: string, filePaths: string[], repoRoot?: string | null): Promise<void> {
@@ -92,6 +99,7 @@ export class GitOperations {
 		}
 		args.push("--", ...uniqueRelativePaths);
 		await this.execGit(args, { cwd: resolvedRepoRoot });
+		await this.pushIfEnabled(resolvedRepoRoot);
 	}
 
 	async resetIndex(repoRoot?: string | null): Promise<void> {
@@ -134,6 +142,7 @@ export class GitOperations {
 			args.push("--no-verify");
 		}
 		await this.execGit(args, { cwd: repoRoot ?? undefined });
+		await this.pushIfEnabled(repoRoot);
 	}
 
 	async retryGitOperation<T>(operation: () => Promise<T>, operationName: string, maxRetries = 3): Promise<T> {
@@ -556,6 +565,15 @@ export class GitOperations {
 			return nonRemote || branchList[0] || "main";
 		} catch {
 			return null;
+		}
+	}
+
+	private async pushIfEnabled(repoRoot?: string | null): Promise<void> {
+		if (!this.autoPush) return;
+		try {
+			await this.execGit(["push", "origin", "HEAD"], { cwd: repoRoot ?? undefined });
+		} catch (error) {
+			console.error("Auto-push failed:", error);
 		}
 	}
 

@@ -45,6 +45,15 @@ const ChipInput: React.FC<ChipInputProps> = ({ value, onChange, placeholder, lab
     }
   };
 
+  const handleBlur = () => {
+    if (disabled) return;
+    const newValue = inputValue.trim();
+    if (newValue && !value.includes(newValue)) {
+      onChange([...value, newValue]);
+    }
+    setInputValue('');
+  };
+
   const removeChip = (index: number) => {
     if (disabled) return;
     onChange(value.filter((_, i) => i !== index));
@@ -87,6 +96,7 @@ const ChipInput: React.FC<ChipInputProps> = ({ value, onChange, placeholder, lab
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
             placeholder={value.length === 0 ? placeholder : ''}
             className="flex-1 min-w-[2ch] outline-none text-sm bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             disabled={disabled}

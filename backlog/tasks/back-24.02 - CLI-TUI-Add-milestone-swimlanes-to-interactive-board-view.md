@@ -1,10 +1,10 @@
 ---
 id: BACK-24.02
 title: 'CLI TUI: Add milestone swimlanes to interactive board view'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2025-12-17 21:42'
-updated_date: '2025-12-17 22:11'
+updated_date: '2026-02-19 18:03'
 labels:
   - cli
   - tui
@@ -12,7 +12,7 @@ labels:
 dependencies: []
 parent_task_id: BACK-24
 priority: low
-ordinal: 22000
+ordinal: 3000
 ---
 
 ## Description

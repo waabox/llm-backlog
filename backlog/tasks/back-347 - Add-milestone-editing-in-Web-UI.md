@@ -1,10 +1,10 @@
 ---
 id: BACK-347
 title: Add milestone editing in Web UI
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2025-12-17 19:29'
-updated_date: '2025-12-17 22:11'
+updated_date: '2026-02-19 18:03'
 labels:
   - milestones
   - web-ui
@@ -12,7 +12,7 @@ labels:
 milestone: m-6
 dependencies: []
 priority: medium
-ordinal: 20000
+ordinal: 2000
 ---
 
 ## Description

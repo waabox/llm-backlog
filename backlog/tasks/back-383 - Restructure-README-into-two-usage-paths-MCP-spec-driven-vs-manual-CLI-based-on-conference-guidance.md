@@ -7,13 +7,14 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-02-11 20:26'
-updated_date: '2026-02-15 16:44'
+updated_date: '2026-02-19 18:03'
 labels: []
 dependencies: []
 references:
   - README.md
   - /Users/alex/projects/mrlesk.com/talks/voxxed/backlog-presentation/pages
 priority: medium
+ordinal: 1000
 ---
 
 ## Description
