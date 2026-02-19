@@ -1,5 +1,5 @@
 import { rename as moveFile } from "node:fs/promises";
-import { collectArchivedMilestoneKeys } from "../../../core/milestones.ts";
+import { collectArchivedMilestoneKeys, resolveMilestoneInput } from "../../../core/milestones.ts";
 import type { Milestone, Task } from "../../../types/index.ts";
 import { McpError } from "../../errors/mcp-errors.ts";
 import type { McpServer } from "../../server.ts";
@@ -106,94 +106,6 @@ function hasMilestoneTitleAliasCollision(sourceMilestone: Milestone, candidates:
 	});
 }
 
-function resolveMilestoneValueForReporting(
-	value: string,
-	activeMilestones: Milestone[],
-	archivedMilestones: Milestone[],
-): string {
-	const normalized = normalizeMilestoneName(value);
-	if (!normalized) {
-		return "";
-	}
-	const inputKey = milestoneKey(normalized);
-	const looksLikeMilestoneId = /^\d+$/.test(normalized) || /^m-\d+$/i.test(normalized);
-	const canonicalInputId = looksLikeMilestoneId
-		? `m-${String(Number.parseInt(normalized.replace(/^m-/i, ""), 10))}`
-		: null;
-	const aliasKeys = new Set<string>([inputKey]);
-	if (canonicalInputId) {
-		const numericAlias = canonicalInputId.replace(/^m-/, "");
-		aliasKeys.add(canonicalInputId);
-		aliasKeys.add(numericAlias);
-	}
-
-	const idMatchesAlias = (milestoneId: string): boolean => {
-		const idKey = milestoneKey(milestoneId);
-		if (aliasKeys.has(idKey)) {
-			return true;
-		}
-		const idMatch = milestoneId.trim().match(/^m-(\d+)$/i);
-		if (!idMatch?.[1]) {
-			return false;
-		}
-		const numericAlias = String(Number.parseInt(idMatch[1], 10));
-		return aliasKeys.has(`m-${numericAlias}`) || aliasKeys.has(numericAlias);
-	};
-	const findIdMatch = (milestones: Milestone[]): Milestone | undefined => {
-		const rawExactMatch = milestones.find((milestone) => milestoneKey(milestone.id) === inputKey);
-		if (rawExactMatch) {
-			return rawExactMatch;
-		}
-		if (canonicalInputId) {
-			const canonicalRawMatch = milestones.find((milestone) => milestoneKey(milestone.id) === canonicalInputId);
-			if (canonicalRawMatch) {
-				return canonicalRawMatch;
-			}
-		}
-		return milestones.find((milestone) => idMatchesAlias(milestone.id));
-	};
-	const findUniqueTitleMatch = (milestones: Milestone[]): Milestone | undefined => {
-		const titleMatches = milestones.filter((milestone) => milestoneKey(milestone.title) === inputKey);
-		return titleMatches.length === 1 ? titleMatches[0] : undefined;
-	};
-
-	const activeTitleMatches = activeMilestones.filter((milestone) => milestoneKey(milestone.title) === inputKey);
-	if (looksLikeMilestoneId) {
-		const activeIdMatch = findIdMatch(activeMilestones);
-		if (activeIdMatch) {
-			return activeIdMatch.id;
-		}
-		const archivedIdMatch = findIdMatch(archivedMilestones);
-		if (archivedIdMatch) {
-			return archivedIdMatch.id;
-		}
-		if (activeTitleMatches.length === 1) {
-			return activeTitleMatches[0]?.id ?? normalized;
-		}
-		if (activeTitleMatches.length > 1) {
-			return normalized;
-		}
-		return findUniqueTitleMatch(archivedMilestones)?.id ?? normalized;
-	}
-
-	const activeTitleMatch = findUniqueTitleMatch(activeMilestones);
-	if (activeTitleMatch) {
-		return activeTitleMatch.id;
-	}
-	if (activeTitleMatches.length > 1) {
-		return normalized;
-	}
-	const activeIdMatch = findIdMatch(activeMilestones);
-	if (activeIdMatch) {
-		return activeIdMatch.id;
-	}
-	const archivedTitleMatch = findUniqueTitleMatch(archivedMilestones);
-	if (archivedTitleMatch) {
-		return archivedTitleMatch.id;
-	}
-	return findIdMatch(archivedMilestones)?.id ?? normalized;
-}
-
 export class MilestoneHandlers {
 	constructor(private readonly core: McpServer) {}
 
@@ -286,7 +198,7 @@ export class MilestoneHandlers {
 		for (const task of tasks) {
 			const normalized = normalizeMilestoneName(task.milestone ?? "");
 			if (!normalized) continue;
-			const canonicalValue = resolveMilestoneValueForReporting(normalized, fileMilestones, archivedMilestones);
+			const canonicalValue = resolveMilestoneInput(normalized, fileMilestones, archivedMilestones);
 			const key = milestoneKey(canonicalValue);
 			if (!discoveredByKey.has(key)) {
 				discoveredByKey.set(key, canonicalValue);
