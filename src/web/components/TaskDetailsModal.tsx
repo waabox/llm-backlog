@@ -93,8 +93,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const resolveMilestoneLabel = useCallback((value?: string | null): string => {
     const resolved = resolveMilestoneToId(value);
     if (!resolved) return "";
-    return getMilestoneLabel(resolved, [...(milestoneEntities ?? []), ...(archivedMilestoneEntities ?? [])]);
-  }, [resolveMilestoneToId, milestoneEntities, archivedMilestoneEntities]);
+    return getMilestoneLabel(resolved, milestoneEntities ?? []);
+  }, [resolveMilestoneToId, milestoneEntities]);
 
   // Sidebar metadata (inline edit)
   const [status, setStatus] = useState(task?.status || (isDraftMode ? "Draft" : (availableStatuses?.[0] || "To Do")));

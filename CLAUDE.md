@@ -60,6 +60,8 @@ src/
     utils/        # milestone resolution, task response formatting
     auth/         # API key, role-based tool filtering
   server/         # BacklogServer (web UI backend + OAuth)
+    routes/       # Route handlers by domain (tasks, milestones, decisions, docs, etc.)
+    auth/         # JWT, Google OAuth, middleware, config-repo, users-store
   types/          # TypeScript type definitions
   utils/          # id-generators, task-search, task-path, status, etc.
   ui/             # TUI components
