@@ -1,15 +1,13 @@
-import { mkdir, rename, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, unlink } from "node:fs/promises";
+import { join } from "node:path";
 import { DEFAULT_DIRECTORIES, DEFAULT_FILES } from "../constants/index.ts";
-import { parseDecision, parseDocument, parseMilestone } from "../markdown/parser.ts";
-import { serializeDecision, serializeDocument } from "../markdown/serializer.ts";
 import type { BacklogConfig, Decision, Document, Milestone, Task, TaskListFilter } from "../types/index.ts";
-import { documentIdsEqual, normalizeDocumentId } from "../utils/document-id.ts";
 import { generateNextId } from "../utils/prefix-config.ts";
-import { sortByTaskId } from "../utils/task-sorting.ts";
 import { ConfigStore } from "./config-store.ts";
+import { DecisionStore } from "./decision-store.ts";
+import { DocumentStore } from "./document-store.ts";
 import { DraftStore } from "./draft-store.ts";
-import { ensureDirectoryExists, sanitizeFilename } from "./shared.ts";
+import { MilestoneStore } from "./milestone-store.ts";
 import { TaskStore } from "./task-store.ts";
 
 export class FileSystem {
@@ -18,6 +16,9 @@ export class FileSystem {
 	private readonly configStore: ConfigStore;
 	private readonly taskStore: TaskStore;
 	private readonly draftStore: DraftStore;
+	private readonly decisionStore: DecisionStore;
+	private readonly documentStore: DocumentStore;
+	private readonly milestoneStore: MilestoneStore;
 	private migrationChecked = false;
 
 	constructor(projectRoot: string) {
@@ -33,6 +34,16 @@ export class FileSystem {
 		this.draftStore = new DraftStore(
 			join(this.backlogDir, DEFAULT_DIRECTORIES.DRAFTS),
 			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_DRAFTS),
+		);
+		this.decisionStore = new DecisionStore(
+			join(this.backlogDir, DEFAULT_DIRECTORIES.DECISIONS),
+		);
+		this.documentStore = new DocumentStore(
+			join(this.backlogDir, DEFAULT_DIRECTORIES.DOCS),
+		);
+		this.milestoneStore = new MilestoneStore(
+			join(this.backlogDir, DEFAULT_DIRECTORIES.MILESTONES),
+			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_MILESTONES),
 		);
 	}
 
@@ -93,26 +104,6 @@ export class FileSystem {
 	async getArchiveTasksDir(): Promise<string> {
 		const backlogDir = await this.getBacklogDir();
 		return join(backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_TASKS);
-	}
-
-	private async getArchiveMilestonesDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_MILESTONES);
-	}
-
-	private async getDecisionsDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.DECISIONS);
-	}
-
-	private async getDocsDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.DOCS);
-	}
-
-	private async getMilestonesDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.MILESTONES);
 	}
 
 	async ensureBacklogStructure(): Promise<void> {
@@ -252,440 +243,47 @@ export class FileSystem {
 		}
 	}
 
-	// Decision log operations
+	// Decision operations - delegated to DecisionStore
 	async saveDecision(decision: Decision): Promise<void> {
-		// Normalize ID - remove "decision-" prefix if present
-		const normalizedId = decision.id.replace(/^decision-/, "");
-		const filename = `decision-${normalizedId} - ${sanitizeFilename(decision.title)}.md`;
-		const decisionsDir = await this.getDecisionsDir();
-		const filepath = join(decisionsDir, filename);
-		const content = serializeDecision(decision);
-
-		const matches = await Array.fromAsync(
-			new Bun.Glob("decision-*.md").scan({ cwd: decisionsDir, followSymlinks: true }),
-		);
-		for (const match of matches) {
-			if (match === filename) continue;
-			if (!match.startsWith(`decision-${normalizedId} -`)) continue;
-			try {
-				await unlink(join(decisionsDir, match));
-			} catch {
-				// Ignore cleanup errors
-			}
-		}
-
-		await ensureDirectoryExists(dirname(filepath));
-		await Bun.write(filepath, content);
+		return this.decisionStore.saveDecision(decision);
 	}
 
 	async loadDecision(decisionId: string): Promise<Decision | null> {
-		try {
-			const decisionsDir = await this.getDecisionsDir();
-			const files = await Array.fromAsync(
-				new Bun.Glob("decision-*.md").scan({ cwd: decisionsDir, followSymlinks: true }),
-			);
-
-			// Normalize ID - remove "decision-" prefix if present
-			const normalizedId = decisionId.replace(/^decision-/, "");
-			const decisionFile = files.find((file) => file.startsWith(`decision-${normalizedId} -`));
-
-			if (!decisionFile) return null;
-
-			const filepath = join(decisionsDir, decisionFile);
-			const content = await Bun.file(filepath).text();
-			return parseDecision(content);
-		} catch (_error) {
-			return null;
-		}
-	}
-
-	// Document operations
-	async saveDocument(document: Document, subPath = ""): Promise<string> {
-		const docsDir = await this.getDocsDir();
-		const canonicalId = normalizeDocumentId(document.id);
-		document.id = canonicalId;
-		const filename = `${canonicalId} - ${sanitizeFilename(document.title)}.md`;
-		const subPathSegments = subPath
-			.split(/[\\/]+/)
-			.map((segment) => segment.trim())
-			.filter((segment) => segment.length > 0 && segment !== "." && segment !== "..");
-		const relativePath = subPathSegments.length > 0 ? join(...subPathSegments, filename) : filename;
-		const filepath = join(docsDir, relativePath);
-		const content = serializeDocument(document);
-
-		await ensureDirectoryExists(dirname(filepath));
-
-		const glob = new Bun.Glob("**/doc-*.md");
-		const existingMatches = await Array.fromAsync(glob.scan({ cwd: docsDir, followSymlinks: true }));
-		const matchesForId = existingMatches.filter((relative) => {
-			const base = relative.split("/").pop() || relative;
-			const [candidateId] = base.split(" - ");
-			if (!candidateId) return false;
-			return documentIdsEqual(canonicalId, candidateId);
-		});
-
-		let sourceRelativePath = document.path;
-		if (!sourceRelativePath && matchesForId.length > 0) {
-			sourceRelativePath = matchesForId[0];
-		}
-
-		if (sourceRelativePath && sourceRelativePath !== relativePath) {
-			const sourcePath = join(docsDir, sourceRelativePath);
-			try {
-				await ensureDirectoryExists(dirname(filepath));
-				await rename(sourcePath, filepath);
-			} catch (error) {
-				const code = (error as NodeJS.ErrnoException | undefined)?.code;
-				if (code !== "ENOENT") {
-					throw error;
-				}
-			}
-		}
-
-		for (const match of matchesForId) {
-			const matchPath = join(docsDir, match);
-			if (matchPath === filepath) {
-				continue;
-			}
-			try {
-				await unlink(matchPath);
-			} catch {
-				// Ignore cleanup errors - file may have been removed already
-			}
-		}
-
-		await Bun.write(filepath, content);
-
-		document.path = relativePath;
-		return relativePath;
+		return this.decisionStore.loadDecision(decisionId);
 	}
 
 	async listDecisions(): Promise<Decision[]> {
-		try {
-			const decisionsDir = await this.getDecisionsDir();
-			const decisionFiles = await Array.fromAsync(
-				new Bun.Glob("decision-*.md").scan({ cwd: decisionsDir, followSymlinks: true }),
-			);
-			const decisions: Decision[] = [];
-			for (const file of decisionFiles) {
-				// Filter out README files as they're just instruction files
-				if (file.toLowerCase().match(/^readme\.md$/i)) {
-					continue;
-				}
-				const filepath = join(decisionsDir, file);
-				const content = await Bun.file(filepath).text();
-				decisions.push(parseDecision(content));
-			}
-			return sortByTaskId(decisions);
-		} catch {
-			return [];
-		}
+		return this.decisionStore.listDecisions();
+	}
+
+	// Document operations - delegated to DocumentStore
+	async saveDocument(document: Document, subPath?: string): Promise<string> {
+		return this.documentStore.saveDocument(document, subPath);
 	}
 
 	async listDocuments(): Promise<Document[]> {
-		try {
-			const docsDir = await this.getDocsDir();
-			// Recursively include all markdown files under docs, excluding README.md variants
-			const glob = new Bun.Glob("**/*.md");
-			const docFiles = await Array.fromAsync(glob.scan({ cwd: docsDir, followSymlinks: true }));
-			const docs: Document[] = [];
-			for (const file of docFiles) {
-				const base = file.split("/").pop() || file;
-				if (base.toLowerCase() === "readme.md") continue;
-				const filepath = join(docsDir, file);
-				const content = await Bun.file(filepath).text();
-				const parsed = parseDocument(content);
-				docs.push({
-					...parsed,
-					path: file,
-				});
-			}
-
-			// Stable sort by title for UI/CLI listing
-			return docs.sort((a, b) => a.title.localeCompare(b.title));
-		} catch {
-			return [];
-		}
+		return this.documentStore.listDocuments();
 	}
 
 	async loadDocument(id: string): Promise<Document> {
-		const documents = await this.listDocuments();
-		const document = documents.find((doc) => documentIdsEqual(id, doc.id));
-		if (!document) {
-			throw new Error(`Document not found: ${id}`);
-		}
-		return document;
+		return this.documentStore.loadDocument(id);
 	}
 
-	private buildMilestoneIdentifierKeys(identifier: string): Set<string> {
-		const normalized = identifier.trim().toLowerCase();
-		const keys = new Set<string>();
-		if (!normalized) {
-			return keys;
-		}
-
-		keys.add(normalized);
-
-		if (/^\d+$/.test(normalized)) {
-			const numeric = String(Number.parseInt(normalized, 10));
-			keys.add(numeric);
-			keys.add(`m-${numeric}`);
-			return keys;
-		}
-
-		const milestoneIdMatch = normalized.match(/^m-(\d+)$/);
-		if (milestoneIdMatch?.[1]) {
-			const numeric = String(Number.parseInt(milestoneIdMatch[1], 10));
-			keys.add(numeric);
-			keys.add(`m-${numeric}`);
-		}
-
-		return keys;
-	}
-
-	private buildMilestoneFilename(id: string, title: string): string {
-		const safeTitle = title
-			.replace(/[<>:"/\\|?*]/g, "")
-			.replace(/\s+/g, "-")
-			.toLowerCase()
-			.slice(0, 50);
-		return `${id} - ${safeTitle}.md`;
-	}
-
-	private serializeMilestoneContent(id: string, title: string, rawContent: string): string {
-		return `---
-id: ${id}
-title: "${title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
----
-
-${rawContent.trim()}
-`;
-	}
-
-	private rewriteDefaultMilestoneDescription(rawContent: string, previousTitle: string, nextTitle: string): string {
-		const defaultDescription = `Milestone: ${previousTitle}`;
-		const descriptionSectionPattern = /(##\s+Description\s*(?:\r?\n)+)([\s\S]*?)(?=(?:\r?\n)##\s+|$)/i;
-
-		return rawContent.replace(descriptionSectionPattern, (fullSection, heading: string, body: string) => {
-			if (body.trim() !== defaultDescription) {
-				return fullSection;
-			}
-			const trailingWhitespace = body.match(/\s*$/)?.[0] ?? "";
-			return `${heading}Milestone: ${nextTitle}${trailingWhitespace}`;
-		});
-	}
-
-	private async findMilestoneFile(
-		identifier: string,
-		scope: "active" | "archived" = "active",
-	): Promise<{
-		file: string;
-		filepath: string;
-		content: string;
-		milestone: Milestone;
-	} | null> {
-		const normalizedInput = identifier.trim().toLowerCase();
-		const candidateKeys = this.buildMilestoneIdentifierKeys(identifier);
-		if (candidateKeys.size === 0) {
-			return null;
-		}
-		const variantKeys = new Set<string>(candidateKeys);
-		variantKeys.delete(normalizedInput);
-		const canonicalInputId =
-			/^\d+$/.test(normalizedInput) || /^m-\d+$/.test(normalizedInput)
-				? `m-${String(Number.parseInt(normalizedInput.replace(/^m-/, ""), 10))}`
-				: null;
-
-		const milestonesDir = scope === "archived" ? await this.getArchiveMilestonesDir() : await this.getMilestonesDir();
-		const milestoneFiles = await Array.fromAsync(
-			new Bun.Glob("m-*.md").scan({ cwd: milestonesDir, followSymlinks: true }),
-		);
-
-		const rawExactIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const canonicalRawIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const exactAliasIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const exactTitleMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const variantIdMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-		const variantTitleMatches: Array<{ file: string; filepath: string; content: string; milestone: Milestone }> = [];
-
-		for (const file of milestoneFiles) {
-			if (file.toLowerCase() === "readme.md") {
-				continue;
-			}
-			const filepath = join(milestonesDir, file);
-			const content = await Bun.file(filepath).text();
-			let milestone: Milestone;
-			try {
-				milestone = parseMilestone(content);
-			} catch {
-				continue;
-			}
-			const idKey = milestone.id.trim().toLowerCase();
-			const idKeys = this.buildMilestoneIdentifierKeys(milestone.id);
-			const titleKey = milestone.title.trim().toLowerCase();
-
-			if (idKey === normalizedInput) {
-				rawExactIdMatches.push({ file, filepath, content, milestone });
-				continue;
-			}
-			if (canonicalInputId && idKey === canonicalInputId) {
-				canonicalRawIdMatches.push({ file, filepath, content, milestone });
-				continue;
-			}
-			if (idKeys.has(normalizedInput)) {
-				exactAliasIdMatches.push({ file, filepath, content, milestone });
-				continue;
-			}
-			if (titleKey === normalizedInput) {
-				exactTitleMatches.push({ file, filepath, content, milestone });
-				continue;
-			}
-			if (Array.from(idKeys).some((key) => variantKeys.has(key))) {
-				variantIdMatches.push({ file, filepath, content, milestone });
-				continue;
-			}
-			if (variantKeys.has(titleKey)) {
-				variantTitleMatches.push({ file, filepath, content, milestone });
-			}
-		}
-
-		const preferIdMatches = /^\d+$/.test(normalizedInput) || /^m-\d+$/.test(normalizedInput);
-		const exactTitleMatch = exactTitleMatches.length === 1 ? exactTitleMatches[0] : null;
-		const variantTitleMatch = variantTitleMatches.length === 1 ? variantTitleMatches[0] : null;
-		const exactAliasIdMatch = exactAliasIdMatches.length === 1 ? exactAliasIdMatches[0] : null;
-		const variantIdMatch = variantIdMatches.length === 1 ? variantIdMatches[0] : null;
-		if (preferIdMatches) {
-			return (
-				rawExactIdMatches[0] ??
-				canonicalRawIdMatches[0] ??
-				exactAliasIdMatch ??
-				variantIdMatch ??
-				exactTitleMatch ??
-				variantTitleMatch ??
-				null
-			);
-		}
-		return (
-			rawExactIdMatches[0] ?? exactTitleMatch ?? canonicalRawIdMatches[0] ?? variantIdMatch ?? variantTitleMatch ?? null
-		);
-	}
-
-	// Milestone operations
+	// Milestone operations - delegated to MilestoneStore
 	async listMilestones(): Promise<Milestone[]> {
-		try {
-			const milestonesDir = await this.getMilestonesDir();
-			const milestoneFiles = await Array.fromAsync(
-				new Bun.Glob("m-*.md").scan({ cwd: milestonesDir, followSymlinks: true }),
-			);
-			const milestones: Milestone[] = [];
-			for (const file of milestoneFiles) {
-				// Filter out README files
-				if (file.toLowerCase() === "readme.md") {
-					continue;
-				}
-				const filepath = join(milestonesDir, file);
-				const content = await Bun.file(filepath).text();
-				milestones.push(parseMilestone(content));
-			}
-			// Sort by ID for consistent ordering
-			return milestones.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-		} catch {
-			return [];
-		}
+		return this.milestoneStore.listMilestones();
 	}
 
 	async listArchivedMilestones(): Promise<Milestone[]> {
-		try {
-			const milestonesDir = await this.getArchiveMilestonesDir();
-			const milestoneFiles = await Array.fromAsync(
-				new Bun.Glob("m-*.md").scan({ cwd: milestonesDir, followSymlinks: true }),
-			);
-			const milestones: Milestone[] = [];
-			for (const file of milestoneFiles) {
-				if (file.toLowerCase() === "readme.md") {
-					continue;
-				}
-				const filepath = join(milestonesDir, file);
-				const content = await Bun.file(filepath).text();
-				milestones.push(parseMilestone(content));
-			}
-			return milestones.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-		} catch {
-			return [];
-		}
+		return this.milestoneStore.listArchivedMilestones();
 	}
 
 	async loadMilestone(id: string): Promise<Milestone | null> {
-		try {
-			const milestoneMatch = await this.findMilestoneFile(id, "active");
-			return milestoneMatch?.milestone ?? null;
-		} catch (_error) {
-			return null;
-		}
+		return this.milestoneStore.loadMilestone(id);
 	}
 
 	async createMilestone(title: string, description?: string): Promise<Milestone> {
-		const milestonesDir = await this.getMilestonesDir();
-
-		// Ensure milestones directory exists
-		await mkdir(milestonesDir, { recursive: true });
-
-		// Find next available milestone ID
-		const archiveMilestonesDir = await this.getArchiveMilestonesDir();
-		await mkdir(archiveMilestonesDir, { recursive: true });
-		const [existingFiles, archivedFiles] = await Promise.all([
-			Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: milestonesDir, followSymlinks: true })),
-			Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: archiveMilestonesDir, followSymlinks: true })),
-		]);
-		const parseMilestoneId = async (dir: string, file: string): Promise<number | null> => {
-			if (file.toLowerCase() === "readme.md") {
-				return null;
-			}
-			const filepath = join(dir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const parsed = parseMilestone(content);
-				const parsedIdMatch = parsed.id.match(/^m-(\d+)$/i);
-				if (parsedIdMatch?.[1]) {
-					return Number.parseInt(parsedIdMatch[1], 10);
-				}
-			} catch {
-				// Fall through to filename-based fallback.
-			}
-			const filenameIdMatch = file.match(/^m-(\d+)/i);
-			if (filenameIdMatch?.[1]) {
-				return Number.parseInt(filenameIdMatch[1], 10);
-			}
-			return null;
-		};
-		const existingIds = (
-			await Promise.all([
-				...existingFiles.map((file) => parseMilestoneId(milestonesDir, file)),
-				...archivedFiles.map((file) => parseMilestoneId(archiveMilestonesDir, file)),
-			])
-		).filter((id): id is number => typeof id === "number" && id >= 0);
-
-		const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 0;
-		const id = `m-${nextId}`;
-
-		const filename = this.buildMilestoneFilename(id, title);
-		const content = this.serializeMilestoneContent(
-			id,
-			title,
-			`## Description
-
-${description || `Milestone: ${title}`}`,
-		);
-
-		const filepath = join(milestonesDir, filename);
-		await Bun.write(filepath, content);
-
-		return {
-			id,
-			title,
-			description: description || `Milestone: ${title}`,
-			rawContent: parseMilestone(content).rawContent,
-		};
+		return this.milestoneStore.createMilestone(title, description);
 	}
 
 	async renameMilestone(
@@ -698,69 +296,7 @@ ${description || `Milestone: ${title}`}`,
 		milestone?: Milestone;
 		previousTitle?: string;
 	}> {
-		const normalizedTitle = title.trim();
-		if (!normalizedTitle) {
-			return { success: false };
-		}
-
-		let sourcePath: string | undefined;
-		let targetPath: string | undefined;
-		let movedFile = false;
-		let originalContent: string | undefined;
-
-		try {
-			const milestoneMatch = await this.findMilestoneFile(identifier, "active");
-			if (!milestoneMatch) {
-				return { success: false };
-			}
-
-			const { milestone } = milestoneMatch;
-			const milestonesDir = await this.getMilestonesDir();
-			const targetFilename = this.buildMilestoneFilename(milestone.id, normalizedTitle);
-			targetPath = join(milestonesDir, targetFilename);
-			sourcePath = milestoneMatch.filepath;
-			originalContent = milestoneMatch.content;
-			const nextRawContent = this.rewriteDefaultMilestoneDescription(
-				milestone.rawContent,
-				milestone.title,
-				normalizedTitle,
-			);
-			const updatedContent = this.serializeMilestoneContent(milestone.id, normalizedTitle, nextRawContent);
-
-			if (sourcePath !== targetPath) {
-				if (await Bun.file(targetPath).exists()) {
-					return { success: false };
-				}
-				await rename(sourcePath, targetPath);
-				movedFile = true;
-			}
-			await Bun.write(targetPath, updatedContent);
-
-			return {
-				success: true,
-				sourcePath,
-				targetPath,
-				milestone: parseMilestone(updatedContent),
-				previousTitle: milestone.title,
-			};
-		} catch {
-			try {
-				if (movedFile && sourcePath && targetPath && sourcePath !== targetPath) {
-					await rename(targetPath, sourcePath);
-					if (originalContent) {
-						await Bun.write(sourcePath, originalContent);
-					}
-				} else if (originalContent) {
-					const restorePath = sourcePath ?? targetPath;
-					if (restorePath) {
-						await Bun.write(restorePath, originalContent);
-					}
-				}
-			} catch {
-				// Ignore rollback failures and surface operation failure to caller.
-			}
-			return { success: false };
-		}
+		return this.milestoneStore.renameMilestone(identifier, title);
 	}
 
 	async archiveMilestone(identifier: string): Promise<{
@@ -769,31 +305,7 @@ ${description || `Milestone: ${title}`}`,
 		targetPath?: string;
 		milestone?: Milestone;
 	}> {
-		const normalized = identifier.trim();
-		if (!normalized) {
-			return { success: false };
-		}
-
-		try {
-			const milestoneMatch = await this.findMilestoneFile(normalized, "active");
-			if (!milestoneMatch) {
-				return { success: false };
-			}
-
-			const archiveDir = await this.getArchiveMilestonesDir();
-			const targetPath = join(archiveDir, milestoneMatch.file);
-			await ensureDirectoryExists(dirname(targetPath));
-			await rename(milestoneMatch.filepath, targetPath);
-
-			return {
-				success: true,
-				sourcePath: milestoneMatch.filepath,
-				targetPath,
-				milestone: milestoneMatch.milestone,
-			};
-		} catch (_error) {
-			return { success: false };
-		}
+		return this.milestoneStore.archiveMilestone(identifier);
 	}
 
 	// Config operations - delegated to ConfigStore

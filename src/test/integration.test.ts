@@ -1,0 +1,592 @@
+/**
+ * Integration tests: two git repos, black-box validation via HTTP endpoints and MCP.
+ *
+ * Config repo  – contains users.md (API keys, roles) — cloned by ConfigRepoService.
+ * Project repo – contains the backlog with mock tasks, milestones, decisions, documents.
+ *
+ * Every test group starts the BacklogServer on a random port, exercises real HTTP
+ * endpoints and the MCP protocol, and validates response payloads plus git state.
+ */
+
+import { $ } from "bun";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { BacklogServer } from "../server/index.ts";
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function uniqueDir(prefix: string): string {
+	return join(process.cwd(), "tmp", `${prefix}-${randomUUID().slice(0, 8)}`);
+}
+
+async function cleanup(...dirs: string[]): Promise<void> {
+	for (const dir of dirs) {
+		try {
+			await rm(dir, { recursive: true, force: true });
+		} catch {
+			// ignore
+		}
+	}
+}
+
+async function initGitRepo(dir: string): Promise<void> {
+	await mkdir(dir, { recursive: true });
+	await $`git init -b main ${dir}`.quiet();
+	await $`git -C ${dir} config user.name "Tester"`.quiet();
+	await $`git -C ${dir} config user.email "test@test.com"`.quiet();
+}
+
+async function gitCommitAll(dir: string, message: string): Promise<void> {
+	await $`git -C ${dir} add -A`.quiet();
+	await $`git -C ${dir} commit -m ${message} --allow-empty`.quiet();
+}
+
+async function gitLog(dir: string): Promise<string[]> {
+	const result = await $`git -C ${dir} log --oneline`.quiet();
+	return result.stdout
+		.toString()
+		.split("\n")
+		.filter((l) => l.trim());
+}
+
+async function gitTrackedFiles(dir: string): Promise<string[]> {
+	const result = await $`git -C ${dir} ls-files`.quiet();
+	return result.stdout
+		.toString()
+		.split("\n")
+		.filter((l) => l.trim());
+}
+
+// ── config repo fixture ───────────────────────────────────────────────────────
+
+const ADMIN_API_KEY = "test-api-key-admin-001";
+const VIEWER_API_KEY = "test-api-key-viewer-002";
+
+async function buildConfigRepo(dir: string): Promise<void> {
+	await initGitRepo(dir);
+	const usersMd = `---
+users:
+  - email: admin@test.com
+    name: Admin User
+    role: admin
+    apiKey: ${ADMIN_API_KEY}
+  - email: viewer@test.com
+    name: Viewer User
+    role: viewer
+    apiKey: ${VIEWER_API_KEY}
+---
+
+# Users
+
+Managed by Backlog.md integration tests.
+`;
+	await writeFile(join(dir, "users.md"), usersMd);
+	await gitCommitAll(dir, "initial: add users.md");
+}
+
+// ── project repo fixture ──────────────────────────────────────────────────────
+
+const CONFIG_YML = `project_name: "Integration Test Project"
+default_status: "To Do"
+statuses:
+  - "To Do"
+  - "In Progress"
+  - "Done"
+labels:
+  - bug
+  - feature
+auto_commit: true
+zero_padded_ids: 0
+task_prefix: task
+`;
+
+const TASK_1_MD = `---
+id: task-1
+title: Initial Task
+status: To Do
+assignee: []
+reporter: '@admin'
+created_date: '2026-01-01'
+labels: []
+dependencies: []
+priority: medium
+---
+
+## Description
+
+First task for integration testing.
+`;
+
+const TASK_2_MD = `---
+id: task-2
+title: Second Task
+status: In Progress
+assignee:
+  - '@viewer'
+reporter: '@admin'
+created_date: '2026-01-02'
+labels:
+  - feature
+dependencies:
+  - task-1
+priority: high
+---
+
+## Description
+
+Second task, depends on task-1.
+`;
+
+const MILESTONE_MD = `---
+id: m-0
+title: "Release 1.0"
+---
+
+## Description
+
+First release milestone.
+`;
+
+const DECISION_MD = `---
+id: decision-1
+title: Use TypeScript
+date: '2026-01-01'
+status: accepted
+---
+
+## Context
+
+We need a typed language for the project.
+
+## Decision
+
+Use TypeScript 5 with strict mode.
+
+## Consequences
+
+Better type safety and IDE support.
+`;
+
+const DOC_MD = `---
+id: doc-001
+title: Getting Started Guide
+type: guide
+created_date: '2026-01-01'
+tags: []
+---
+
+## Overview
+
+This guide explains how to get started.
+`;
+
+async function buildProjectRepo(dir: string): Promise<void> {
+	await initGitRepo(dir);
+
+	const backlog = join(dir, "backlog");
+	const paths = {
+		tasks: join(backlog, "tasks"),
+		completed: join(backlog, "completed"),
+		archive: join(backlog, "archive", "tasks"),
+		archiveDrafts: join(backlog, "archive", "drafts"),
+		drafts: join(backlog, "drafts"),
+		milestones: join(backlog, "milestones"),
+		archiveMilestones: join(backlog, "archive", "milestones"),
+		decisions: join(backlog, "decisions"),
+		docs: join(backlog, "docs"),
+	};
+
+	for (const p of Object.values(paths)) {
+		await mkdir(p, { recursive: true });
+	}
+
+	await writeFile(join(backlog, "config.yml"), CONFIG_YML);
+	await writeFile(join(paths.tasks, "task-1 - Initial Task.md"), TASK_1_MD);
+	await writeFile(join(paths.tasks, "task-2 - Second Task.md"), TASK_2_MD);
+	await writeFile(join(paths.milestones, "m-0 - release-1.0.md"), MILESTONE_MD);
+	await writeFile(join(paths.decisions, "decision-1 - Use TypeScript.md"), DECISION_MD);
+	await writeFile(join(paths.docs, "doc-001 - Getting Started Guide.md"), DOC_MD);
+
+	await gitCommitAll(dir, "initial: add mock backlog data");
+}
+
+// ── server lifecycle ──────────────────────────────────────────────────────────
+
+/** Picks a random port between 14000 and 15000 to avoid conflicts. */
+function randomPort(): number {
+	return 14000 + Math.floor(Math.random() * 1000);
+}
+
+type TestEnv = {
+	configDir: string;
+	projectDir: string;
+	server: BacklogServer;
+	port: number;
+	baseUrl: string;
+	adminHeaders: HeadersInit;
+	viewerHeaders: HeadersInit;
+};
+
+async function startTestEnv(): Promise<TestEnv> {
+	const configDir = uniqueDir("cfg-repo");
+	const projectDir = uniqueDir("proj-repo");
+
+	await buildConfigRepo(configDir);
+	await buildProjectRepo(projectDir);
+
+	process.env.AUTH_CONFIG_REPO = configDir;
+
+	const server = new BacklogServer(projectDir);
+	const port = randomPort();
+	await server.start(port, false);
+
+	return {
+		configDir,
+		projectDir,
+		server,
+		port,
+		baseUrl: `http://localhost:${port}`,
+		adminHeaders: { Authorization: `Bearer ${ADMIN_API_KEY}`, "Content-Type": "application/json" },
+		viewerHeaders: { Authorization: `Bearer ${VIEWER_API_KEY}`, "Content-Type": "application/json" },
+	};
+}
+
+async function stopTestEnv(env: TestEnv): Promise<void> {
+	await env.server.stop();
+	delete process.env.AUTH_CONFIG_REPO;
+	await cleanup(env.configDir, env.projectDir);
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+describe("REST API — tasks", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/tasks lists mock tasks", async () => {
+		const res = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		expect(tasks.length).toBeGreaterThanOrEqual(2);
+		// IDs are normalised to uppercase prefix by the server
+		const titles = tasks.map((t: { title: string }) => t.title);
+		expect(titles).toContain("Initial Task");
+		expect(titles).toContain("Second Task");
+	});
+
+	test("GET /api/tasks/:id returns a specific task", async () => {
+		// List first to get the real server-assigned ID
+		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		const body = await listRes.json();
+		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const task1 = tasks.find((t: { title: string }) => t.title === "Initial Task");
+		expect(task1).toBeTruthy();
+
+		const res = await fetch(`${env.baseUrl}/api/tasks/${task1.id}`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const task = await res.json();
+		expect(task.title).toBe("Initial Task");
+		expect(task.status).toBe("To Do");
+	});
+
+	test("POST /api/tasks creates a new task and commits it", async () => {
+		const logBefore = await gitLog(env.projectDir);
+
+		const res = await fetch(`${env.baseUrl}/api/tasks`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Created via API", description: "Integration test creation" }),
+		});
+		expect([200, 201]).toContain(res.status);
+		const task = await res.json();
+		expect(task.title).toBe("Created via API");
+		expect(task.id).toBeTruthy();
+
+		// git state: a commit was created (auto_commit: true)
+		const logAfter = await gitLog(env.projectDir);
+		expect(logAfter.length).toBeGreaterThan(logBefore.length);
+
+		// task file must be tracked in git
+		const tracked = await gitTrackedFiles(env.projectDir);
+		expect(tracked.some((f) => f.toLowerCase().includes(task.id.toLowerCase()))).toBe(true);
+	});
+
+	test("PUT /api/tasks/:id updates task status", async () => {
+		// Get task-2's real ID from the list
+		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		const body = await listRes.json();
+		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const task2 = tasks.find((t: { title: string }) => t.title === "Second Task");
+		expect(task2).toBeTruthy();
+
+		const res = await fetch(`${env.baseUrl}/api/tasks/${task2.id}`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ status: "Done" }),
+		});
+		expect(res.status).toBe(200);
+		const updated = await res.json();
+		expect(updated.status).toBe("Done");
+	});
+
+	test("POST /api/tasks/:id/complete moves task to completed", async () => {
+		// Get real ID for Initial Task
+		const listRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		const body = await listRes.json();
+		const tasks = Array.isArray(body) ? body : body.tasks ?? body.data ?? [];
+		const task1 = tasks.find((t: { title: string }) => t.title === "Initial Task");
+		expect(task1).toBeTruthy();
+
+		const res = await fetch(`${env.baseUrl}/api/tasks/${task1.id}/complete`, {
+			method: "POST",
+			headers: env.adminHeaders,
+		});
+		expect(res.status).toBe(200);
+
+		// task-1 should no longer appear in the active list
+		const listRes2 = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		const body2 = await listRes2.json();
+		const activeTasks = Array.isArray(body2) ? body2 : body2.tasks ?? body2.data ?? [];
+		const activeTitles = activeTasks.map((t: { title: string }) => t.title);
+		expect(activeTitles).not.toContain("Initial Task");
+
+		// file must exist under completed/ in git
+		const tracked = await gitTrackedFiles(env.projectDir);
+		expect(tracked.some((f) => f.includes("completed") && f.toLowerCase().includes(task1.id.toLowerCase()))).toBe(
+			true,
+		);
+	});
+});
+
+describe("REST API — milestones", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/milestones returns mock milestone", async () => {
+		const res = await fetch(`${env.baseUrl}/api/milestones`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const milestones = await res.json();
+		expect(Array.isArray(milestones)).toBe(true);
+		expect(milestones.length).toBeGreaterThanOrEqual(1);
+		expect(milestones[0].id).toBe("m-0");
+		expect(milestones[0].title).toBe("Release 1.0");
+	});
+
+	test("POST /api/milestones creates a milestone and persists the file", async () => {
+		const res = await fetch(`${env.baseUrl}/api/milestones`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Release 2.0", description: "Second major release" }),
+		});
+		expect([200, 201]).toContain(res.status);
+		const milestone = await res.json();
+		expect(milestone.title).toBe("Release 2.0");
+		expect(milestone.id).toMatch(/^m-\d+$/);
+
+		// Verify via GET that the milestone is now listed
+		const listRes = await fetch(`${env.baseUrl}/api/milestones`, { headers: env.adminHeaders });
+		const milestones = await listRes.json();
+		expect(milestones.some((m: { title: string }) => m.title === "Release 2.0")).toBe(true);
+	});
+
+	test("GET /api/milestones/:id returns a specific milestone", async () => {
+		const res = await fetch(`${env.baseUrl}/api/milestones/m-0`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const milestone = await res.json();
+		expect(milestone.id).toBe("m-0");
+	});
+});
+
+describe("REST API — decisions & docs", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/decisions returns mock decision", async () => {
+		const res = await fetch(`${env.baseUrl}/api/decisions`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const decisions = await res.json();
+		expect(Array.isArray(decisions)).toBe(true);
+		expect(decisions.some((d: { id: string }) => d.id === "decision-1")).toBe(true);
+	});
+
+	test("POST /api/decisions creates a decision", async () => {
+		// API only takes { title } — body/content is updated via PUT
+		const res = await fetch(`${env.baseUrl}/api/decisions`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Use Bun as runtime" }),
+		});
+		expect([200, 201]).toContain(res.status);
+		const decision = await res.json();
+		expect(decision.title).toBe("Use Bun as runtime");
+	});
+
+	test("GET /api/docs returns mock document", async () => {
+		const res = await fetch(`${env.baseUrl}/api/docs`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const docs = await res.json();
+		expect(Array.isArray(docs)).toBe(true);
+		expect(docs.some((d: { id: string }) => d.id === "doc-001")).toBe(true);
+	});
+
+	test("POST /api/docs creates a document", async () => {
+		// API expects { filename, content } — filename becomes the title
+		const res = await fetch(`${env.baseUrl}/api/docs`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ filename: "Deployment Guide.md", content: "## Steps\n\nDeploy here." }),
+		});
+		expect([200, 201]).toContain(res.status);
+		const doc = await res.json();
+		expect(doc.id ?? doc.success).toBeTruthy();
+	});
+});
+
+describe("REST API — config & status", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/status returns project info", async () => {
+		const res = await fetch(`${env.baseUrl}/api/status`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const status = await res.json();
+		expect(status).toBeTruthy();
+	});
+
+	test("GET /api/config returns project config", async () => {
+		const res = await fetch(`${env.baseUrl}/api/config`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const config = await res.json();
+		expect(config.projectName ?? config.project_name).toBe("Integration Test Project");
+	});
+
+	test("GET /api/statuses returns configured statuses", async () => {
+		const res = await fetch(`${env.baseUrl}/api/statuses`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const statuses = await res.json();
+		expect(Array.isArray(statuses)).toBe(true);
+		expect(statuses).toContain("To Do");
+		expect(statuses).toContain("Done");
+	});
+});
+
+describe("MCP endpoint", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	async function mcpCall(env: TestEnv, body: unknown): Promise<Response> {
+		return fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: {
+				...env.adminHeaders,
+				Accept: "application/json, text/event-stream",
+			},
+			body: JSON.stringify(body),
+		});
+	}
+
+	test("tools/list returns available tools", async () => {
+		const res = await mcpCall(env, {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "tools/list",
+			params: {},
+		});
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body).toContain("tools");
+	});
+
+	test("tools/call task_list returns tasks", async () => {
+		const res = await mcpCall(env, {
+			jsonrpc: "2.0",
+			id: 2,
+			method: "tools/call",
+			params: {
+				name: "task_list",
+				arguments: {},
+			},
+		});
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		// Response is SSE or JSON — either way it should contain task content
+		expect(body.toLowerCase()).toMatch(/task|initial/);
+	});
+
+	test("tools/call task_create creates a task via MCP", async () => {
+		const logBefore = await gitLog(env.projectDir);
+
+		const res = await mcpCall(env, {
+			jsonrpc: "2.0",
+			id: 3,
+			method: "tools/call",
+			params: {
+				name: "task_create",
+				arguments: { title: "MCP Created Task", description: "Created via MCP protocol" },
+			},
+		});
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body.toLowerCase()).toContain("mcp created task");
+
+		const logAfter = await gitLog(env.projectDir);
+		expect(logAfter.length).toBeGreaterThan(logBefore.length);
+	});
+
+	test("resources/list returns available resources", async () => {
+		const res = await mcpCall(env, {
+			jsonrpc: "2.0",
+			id: 4,
+			method: "resources/list",
+			params: {},
+		});
+		expect(res.status).toBe(200);
+	});
+
+	test("unauthenticated MCP request is rejected", async () => {
+		const res = await fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/list", params: {} }),
+		});
+		expect(res.status).toBe(401);
+	});
+});

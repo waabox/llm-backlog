@@ -33,9 +33,7 @@
 		"commander": "14.0.2",
 		"fuse.js": "7.1.0",
 		"gray-matter": "4.0.3",
-		"husky": "9.1.7",
 		"install": "0.13.0",
-		"lint-staged": "16.2.7",
 		"mermaid": "11.12.2",
 		"jsdom": "27.4.0",
 		"neo-neo-bblessed": "1.0.9",
@@ -52,24 +50,12 @@
 		"lint": "biome lint --write .",
 		"check": "biome check .",
 		"check:types": "bunx tsc --noEmit",
-		"prepare": "husky",
 		"build:css": "bun ./node_modules/@tailwindcss/cli/dist/index.mjs -i src/web/styles/source.css -o src/web/styles/style.css --minify",
 		"build": "bun run build:css && bun build --production --compile --minify --outfile=dist/backlog src/cli.ts",
 		"cli": "bun run build:css && bun src/cli.ts",
 		"mcp": "bun src/cli.ts mcp start",
 		"update-nix": "sh scripts/update-nix.sh",
 		"postinstall": "sh -c 'command -v bun2nix >/dev/null 2>&1 && bun2nix -o bun.nix || (command -v nix >/dev/null 2>&1 && nix --extra-experimental-features \"nix-command flakes\" run github:baileyluTCD/bun2nix/85d692d68a5345d868d3bb1158b953d2996d70f7 -- -o bun.nix || true)'"
-	},
-	"lint-staged": {
-		"package.json": [
-			"biome check --write --files-ignore-unknown=true"
-		],
-		"*.json": [
-			"biome check --write --files-ignore-unknown=true"
-		],
-		"src/**/*.{ts,js}": [
-			"biome check --write --files-ignore-unknown=true"
-		]
 	},
 	"author": "Alex Gavrilescu (https://github.com/MrLesk)",
 	"repository": {
