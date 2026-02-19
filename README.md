@@ -1,12 +1,15 @@
 <h1 align="center">Backlog.md</h1>
 <p align="center">Markdown‑native Task Manager &amp; Kanban visualizer for any Git repository</p>
 
-<p align="center">
-<code>npm i -g backlog.md</code> or <code>bun add -g backlog.md</code> or <code>brew install backlog-md</code> or <code>nix run github:MrLesk/Backlog.md</code>
-</p>
+---
+
+> **This project is based on [waabox/Backlog.md](https://github.com/waabox/Backlog.md).**
+> Due to a shift in focus and direction, I am rebuilding it from the ground up with new goals and architecture.
+> Once the TypeScript version reaches a stable state, the plan is to port it to **Rust**.
+
+---
 
 ![Backlog demo GIF using: backlog board](./.github/backlog.gif)
-
 
 ---
 
