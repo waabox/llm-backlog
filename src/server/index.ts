@@ -10,6 +10,7 @@ import favicon from "../web/favicon.png" with { type: "file" };
 import indexHtml from "../web/index.html";
 import { ConfigRepoService } from "./auth/config-repo";
 import { authenticateRequest } from "./auth/middleware";
+import { ProjectRepoService } from "./project-repo";
 import { handleGetMe, handleGoogleLogin } from "./routes/auth.ts";
 import {
 	handleGetConfig,
@@ -59,13 +60,21 @@ export class BacklogServer {
 	private storeReadyBroadcasted = false;
 	private configWatcher: { stop: () => void } | null = null;
 	private configRepoService: ConfigRepoService | null = null;
+	private projectRepoService: ProjectRepoService | null = null;
 	private authEnabled = false;
 	private jwtSecret: string = crypto.randomUUID();
 	private googleClientId: string | null = null;
 	private mcpHandler: McpRequestHandler | null = null;
+	private readonly projectRepoUrl: string | null;
 
 	constructor(projectPath: string) {
-		this.core = new Core(projectPath, { enableWatchers: true });
+		this.projectRepoUrl = process.env.BACKLOG_PROJECT_REPO ?? null;
+		if (!this.projectRepoUrl) {
+			this.core = new Core(projectPath, { enableWatchers: true });
+		} else {
+			// Core will be initialized in start() after the repo is cloned
+			this.core = null as unknown as Core;
+		}
 	}
 
 	/**
@@ -136,6 +145,17 @@ export class BacklogServer {
 			console.log("Server already running");
 			return;
 		}
+
+		// Clone remote project repo if BACKLOG_PROJECT_REPO is set
+		if (this.projectRepoUrl) {
+			console.log(`Cloning project repo: ${this.projectRepoUrl}`);
+			this.projectRepoService = new ProjectRepoService(this.projectRepoUrl);
+			await this.projectRepoService.start();
+			this.core = new Core(this.projectRepoService.dir, { enableWatchers: true });
+			this.core.git.setAutoPush(true);
+			this.core.setAutoCommitOverride(true);
+		}
+
 		// Load config (migration is handled globally by CLI)
 		const config = await this.core.filesystem.loadConfig();
 
@@ -354,6 +374,12 @@ export class BacklogServer {
 					"/api/sequences/move": {
 						POST: this.protect(async (req: Request) => await handleMoveSequence(req, this.core)),
 					},
+					"/api/users": {
+						GET: async () => {
+							const users = this.configRepoService?.listUsers() ?? [];
+							return Response.json(users.map(({ email, name }) => ({ email, name })));
+						},
+					},
 					"/api/auth/status": {
 						GET: async () => {
 							return Response.json({
@@ -473,6 +499,12 @@ export class BacklogServer {
 		try {
 			await this.configRepoService?.stop();
 			this.configRepoService = null;
+		} catch {}
+
+		// Stop project repo service (cleans up temp clone)
+		try {
+			await this.projectRepoService?.stop();
+			this.projectRepoService = null;
 		} catch {}
 
 		this.core.disposeSearchService();

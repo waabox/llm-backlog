@@ -90,4 +90,13 @@ export class UsersStore {
 		if (apiKey.length === 0) return null;
 		return this.apiKeys.get(apiKey) ?? null;
 	}
+
+	/**
+	 * Returns all loaded users.
+	 *
+	 * @returns Array of all AuthUser entries
+	 */
+	listAll(): AuthUser[] {
+		return Array.from(this.users.values());
+	}
 }

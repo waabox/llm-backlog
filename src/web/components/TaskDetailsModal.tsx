@@ -7,6 +7,7 @@ import MDEditor from "@uiw/react-md-editor";
 import AcceptanceCriteriaEditor from "./AcceptanceCriteriaEditor";
 import MermaidMarkdown from './MermaidMarkdown';
 import ChipInput from "./ChipInput";
+import AssigneeInput from "./AssigneeInput";
 import DependencyInput from "./DependencyInput";
 import { formatStoredUtcDateForDisplay } from "../utils/date-display";
 import { getMilestoneLabel, resolveMilestoneInput } from "../utils/milestones";
@@ -852,12 +853,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
           {/* Assignee */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Assignee" />
-            <ChipInput
-              name="assignee"
-              label=""
+            <AssigneeInput
               value={assignee}
               onChange={(value) => handleInlineMetaUpdate({ assignee: value })}
-              placeholder="Type name and press Enter"
               disabled={isFromOtherBranch}
             />
           </div>

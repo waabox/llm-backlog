@@ -548,6 +548,10 @@ export class ApiClient {
 		);
 	}
 
+	async fetchUsers(): Promise<{ email: string; name: string }[]> {
+		return this.fetchJson<{ email: string; name: string }[]>(`${API_BASE}/users`);
+	}
+
 	async fetchAuthStatus(): Promise<{ enabled: boolean; clientId?: string }> {
 		const response = await fetch(`${API_BASE}/auth/status`);
 		if (!response.ok) throw new Error("Failed to fetch auth status");

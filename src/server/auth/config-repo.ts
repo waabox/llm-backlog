@@ -72,6 +72,15 @@ export class ConfigRepoService {
 	}
 
 	/**
+	 * Returns all users from the config repo.
+	 *
+	 * @returns Array of all AuthUser entries, or empty array if not started
+	 */
+	listUsers(): AuthUser[] {
+		return this.usersStore?.listAll() ?? [];
+	}
+
+	/**
 	 * Stops the poll timer and removes the temporary clone directory.
 	 */
 	async stop(): Promise<void> {
