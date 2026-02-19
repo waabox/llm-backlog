@@ -1,11 +1,41 @@
-import type { Core } from "../core/backlog.ts";
+import type { Command } from "commander";
+import { Core } from "../core/backlog.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
 import { createLoadingScreen } from "../ui/loading.ts";
 import { renderOverviewTui } from "../ui/overview-tui.ts";
+import { requireProjectRoot } from "./shared.ts";
 
 function formatTime(ms: number): string {
 	if (ms < 1000) return `${Math.round(ms)}ms`;
 	return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * Register the overview command for displaying project statistics and metrics.
+ *
+ * @param program - Commander program instance
+ */
+export function registerOverviewCommand(program: Command): void {
+	program
+		.command("overview")
+		.description("display project statistics and metrics")
+		.action(async () => {
+			try {
+				const cwd = await requireProjectRoot();
+				const core = new Core(cwd);
+				const config = await core.filesystem.loadConfig();
+
+				if (!config) {
+					console.error("No backlog project found. Initialize one first with: backlog init");
+					process.exit(1);
+				}
+
+				await runOverviewCommand(core);
+			} catch (err) {
+				console.error("Failed to display project overview", err);
+				process.exitCode = 1;
+			}
+		});
 }
 
 export async function runOverviewCommand(core: Core): Promise<void> {

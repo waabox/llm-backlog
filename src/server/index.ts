@@ -9,7 +9,7 @@ import { getTaskStatistics } from "../core/statistics.ts";
 import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
 import type { SearchPriorityFilter, SearchResultType, Task, TaskUpdateInput } from "../types/index.ts";
 import { watchConfig } from "../utils/config-watcher.ts";
-import { PREFIX_PATTERN, parseTaskIdSegments, stripPrefix } from "../utils/task-search.ts";
+import { PREFIX_PATTERN, parseTaskIdSegments } from "../utils/task-search.ts";
 import { getVersion } from "../utils/version.ts";
 import { ConfigRepoService } from "./auth/config-repo";
 import { verifyGoogleToken } from "./auth/google-verify";

@@ -10,7 +10,7 @@ import type {
 	SearchResultType,
 	Task,
 } from "../types/index.ts";
-import { createTaskIdVariants, extractPrefix, parseTaskIdSegments, stripPrefix } from "../utils/task-search.ts";
+import { createTaskIdVariants } from "../utils/task-search.ts";
 import type { ContentStore, ContentStoreEvent } from "./content-store.ts";
 
 interface BaseSearchEntity {
