@@ -11,6 +11,7 @@ import { collectAvailableLabels } from "../../utils/label-filter.ts";
 import { collectArchivedMilestoneKeys, getMilestoneLabel, milestoneKey } from "../utils/milestones";
 import CleanupModal from "./CleanupModal";
 import { SuccessToast } from "./SuccessToast";
+import { useAuth } from "../contexts/AuthContext";
 
 interface TaskListProps {
 	onEditTask: (task: Task) => void;
@@ -50,6 +51,8 @@ const TaskList: React.FC<TaskListProps> = ({
 	archivedMilestones,
 	onRefreshData,
 }) => {
+	const { user } = useAuth();
+	const isViewer = user?.role === "viewer";
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [searchValue, setSearchValue] = useState(() => searchParams.get("query") ?? "");
 	const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") ?? "");
@@ -458,12 +461,14 @@ const TaskList: React.FC<TaskListProps> = ({
 			<div className="flex flex-col gap-4 mb-6">
 				<div className="flex items-center justify-between gap-3">
 						<h1 className="text-2xl font-bold text-gray-900 dark:text-white">All Tasks</h1>
-						<button
-							className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200"
-							onClick={onNewTask}
-						>
-							+ New Task
-					</button>
+						{!isViewer && (
+							<button
+								className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200"
+								onClick={onNewTask}
+							>
+								+ New Task
+							</button>
+						)}
 				</div>
 
 				<div className="flex flex-wrap items-center gap-3 justify-between">
@@ -601,7 +606,7 @@ const TaskList: React.FC<TaskListProps> = ({
 					</div>
 
 					<div className="flex items-center gap-3 flex-shrink-0">
-						{statusFilter.toLowerCase() === 'done' && displayTasks.length > 0 && (
+						{!isViewer && statusFilter.toLowerCase() === 'done' && displayTasks.length > 0 && (
 								<button
 									type="button"
 									onClick={() => setShowCleanupModal(true)}

@@ -6,6 +6,7 @@ import { collectArchivedMilestoneKeys, milestoneKey } from '../utils/milestones'
 import TaskColumn from './TaskColumn';
 import CleanupModal from './CleanupModal';
 import { SuccessToast } from './SuccessToast';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BoardProps {
   onEditTask: (task: Task) => void;
@@ -37,6 +38,8 @@ const Board: React.FC<BoardProps> = ({
   onLaneChange,
   milestoneFilter,
 }) => {
+  const { user } = useAuth();
+  const isViewer = user?.role === "viewer";
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null);
   const [dragSourceLane, setDragSourceLane] = useState<string | null>(null);
@@ -411,12 +414,14 @@ const Board: React.FC<BoardProps> = ({
             </button>
           </div>
         </div>
-	        <button
-	          className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200"
-	          onClick={onNewTask}
-	        >
-	          + New Task
-        </button>
+	        {!isViewer && (
+	          <button
+	            className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200"
+	            onClick={onNewTask}
+	          >
+	            + New Task
+	          </button>
+	        )}
       </div>
 
       {laneMode === 'milestone' ? (
@@ -491,7 +496,7 @@ const Board: React.FC<BoardProps> = ({
                               setDragSourceStatus(null);
                               setDragSourceLane(null);
                             }}
-                            onCleanup={status.toLowerCase() === 'done' ? () => setShowCleanupModal(true) : undefined}
+                            onCleanup={!isViewer && status.toLowerCase() === 'done' ? () => setShowCleanupModal(true) : undefined}
                           />
                         </div>
                       ))}
@@ -524,7 +529,7 @@ const Board: React.FC<BoardProps> = ({
                     setDragSourceStatus(null);
                     setDragSourceLane(null);
                   }}
-                  onCleanup={status.toLowerCase() === 'done' ? () => setShowCleanupModal(true) : undefined}
+                  onCleanup={!isViewer && status.toLowerCase() === 'done' ? () => setShowCleanupModal(true) : undefined}
                 />
               </div>
             ))}

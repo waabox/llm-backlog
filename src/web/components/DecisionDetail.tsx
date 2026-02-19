@@ -8,6 +8,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { SuccessToast } from './SuccessToast';
 import { useTheme } from '../contexts/ThemeContext';
 import { sanitizeUrlTitle } from '../utils/urlHelpers';
+import { useAuth } from '../contexts/AuthContext';
 
 // Utility function for ID transformations
 const stripIdPrefix = (id: string): string => {
@@ -71,6 +72,8 @@ interface DecisionDetailProps {
 }
 
 export default function DecisionDetail({ decisions, onRefreshData }: DecisionDetailProps) {
+	const { user } = useAuth();
+	const isViewer = user?.role === "viewer";
 	const { id, title } = useParams<{ id: string; title: string }>();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -301,6 +304,7 @@ export default function DecisionDetail({ decisions, onRefreshData }: DecisionDet
 								)}
 							</div>
 						</div>
+						{!isViewer && (
 						<div className="flex items-center space-x-3 ml-6">
 							{/* Temporarily hidden - decisions editing not ready */}
 								{false ? (
@@ -339,6 +343,7 @@ export default function DecisionDetail({ decisions, onRefreshData }: DecisionDet
 								</div>
 							)}
 						</div>
+						)}
 					</div>
 				</div>
 			</div>

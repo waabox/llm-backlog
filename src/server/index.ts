@@ -9,6 +9,10 @@ import { getTaskStatistics } from "../core/statistics.ts";
 import type { SearchPriorityFilter, SearchResultType, Task, TaskUpdateInput } from "../types/index.ts";
 import { watchConfig } from "../utils/config-watcher.ts";
 import { getVersion } from "../utils/version.ts";
+import { ConfigRepoService } from "./auth/config-repo";
+import { verifyGoogleToken } from "./auth/google-verify";
+import { signJwt, verifyJwt } from "./auth/jwt";
+import { authenticateRequest, extractBearerToken } from "./auth/middleware";
 
 // Regex pattern to match any prefix (letters followed by dash)
 const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
@@ -82,9 +86,31 @@ export class BacklogServer {
 	private unsubscribeContentStore?: () => void;
 	private storeReadyBroadcasted = false;
 	private configWatcher: { stop: () => void } | null = null;
+	private configRepoService: ConfigRepoService | null = null;
+	private authEnabled = false;
+	private jwtSecret: string = crypto.randomUUID();
+	private googleClientId: string | null = null;
 
 	constructor(projectPath: string) {
 		this.core = new Core(projectPath, { enableWatchers: true });
+	}
+
+	/**
+	 * Wraps a route handler with authentication enforcement.
+	 *
+	 * The returned handler runs authenticateRequest before delegating to the
+	 * original handler. If authentication fails, an error Response is returned
+	 * immediately without ever invoking the inner handler.
+	 *
+	 * @param handler - The route handler to protect.
+	 * @returns A new handler that checks auth first.
+	 */
+	private protect<T extends Request>(handler: (req: T) => Promise<Response>): (req: T) => Promise<Response> {
+		return async (req: T) => {
+			const { errorResponse } = authenticateRequest(req, this.authEnabled, this.jwtSecret);
+			if (errorResponse) return errorResponse;
+			return handler.call(this, req);
+		};
 	}
 
 	private async resolveMilestoneInput(milestone: string): Promise<string> {
@@ -294,6 +320,20 @@ export class BacklogServer {
 			},
 		});
 
+		// Initialize auth if environment variables are configured
+		this.googleClientId = process.env.GOOGLE_CLIENT_ID ?? null;
+		const authConfigRepo = process.env.AUTH_CONFIG_REPO ?? null;
+		this.jwtSecret = process.env.JWT_SECRET ?? crypto.randomUUID();
+
+		if (this.googleClientId && authConfigRepo) {
+			this.authEnabled = true;
+			this.configRepoService = new ConfigRepoService(authConfigRepo);
+			await this.configRepoService.start();
+			console.log("Auth enabled (Google OAuth)");
+		} else {
+			console.log("Auth disabled (set GOOGLE_CLIENT_ID and AUTH_CONFIG_REPO to enable)");
+		}
+
 		try {
 			await this.ensureServicesReady();
 			const serveOptions = {
@@ -313,104 +353,145 @@ export class BacklogServer {
 
 					// API Routes using Bun's native route syntax
 					"/api/tasks": {
-						GET: async (req: Request) => await this.handleListTasks(req),
-						POST: async (req: Request) => await this.handleCreateTask(req),
+						GET: this.protect(async (req: Request) => await this.handleListTasks(req)),
+						POST: this.protect(async (req: Request) => await this.handleCreateTask(req)),
 					},
 					"/api/task/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+						),
 					},
 					"/api/tasks/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateTask(req, req.params.id),
-						DELETE: async (req: Request & { params: { id: string } }) => await this.handleDeleteTask(req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+						),
+						PUT: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleUpdateTask(req, req.params.id),
+						),
+						DELETE: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleDeleteTask(req.params.id),
+						),
 					},
 					"/api/tasks/:id/complete": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handleCompleteTask(req.params.id),
+						POST: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleCompleteTask(req.params.id),
+						),
 					},
 					"/api/statuses": {
-						GET: async () => await this.handleGetStatuses(),
+						GET: this.protect(async () => await this.handleGetStatuses()),
 					},
 					"/api/config": {
-						GET: async () => await this.handleGetConfig(),
-						PUT: async (req: Request) => await this.handleUpdateConfig(req),
+						GET: this.protect(async () => await this.handleGetConfig()),
+						PUT: this.protect(async (req: Request) => await this.handleUpdateConfig(req)),
 					},
 					"/api/docs": {
-						GET: async () => await this.handleListDocs(),
-						POST: async (req: Request) => await this.handleCreateDoc(req),
+						GET: this.protect(async () => await this.handleListDocs()),
+						POST: this.protect(async (req: Request) => await this.handleCreateDoc(req)),
 					},
 					"/api/doc/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+						),
 					},
 					"/api/docs/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDoc(req, req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+						),
+						PUT: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleUpdateDoc(req, req.params.id),
+						),
 					},
 					"/api/decisions": {
-						GET: async () => await this.handleListDecisions(),
-						POST: async (req: Request) => await this.handleCreateDecision(req),
+						GET: this.protect(async () => await this.handleListDecisions()),
+						POST: this.protect(async (req: Request) => await this.handleCreateDecision(req)),
 					},
 					"/api/decision/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+						),
 					},
 					"/api/decisions/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) =>
-							await this.handleUpdateDecision(req, req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+						),
+						PUT: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleUpdateDecision(req, req.params.id),
+						),
 					},
 					"/api/drafts": {
-						GET: async () => await this.handleListDrafts(),
+						GET: this.protect(async () => await this.handleListDrafts()),
 					},
 					"/api/drafts/:id/promote": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handlePromoteDraft(req.params.id),
+						POST: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handlePromoteDraft(req.params.id),
+						),
 					},
 					"/api/milestones": {
-						GET: async () => await this.handleListMilestones(),
-						POST: async (req: Request) => await this.handleCreateMilestone(req),
+						GET: this.protect(async () => await this.handleListMilestones()),
+						POST: this.protect(async (req: Request) => await this.handleCreateMilestone(req)),
 					},
 					"/api/milestones/archived": {
-						GET: async () => await this.handleListArchivedMilestones(),
+						GET: this.protect(async () => await this.handleListArchivedMilestones()),
 					},
 					"/api/milestones/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetMilestone(req.params.id),
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleGetMilestone(req.params.id),
+						),
 					},
 					"/api/milestones/:id/archive": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveMilestone(req.params.id),
+						POST: this.protect(
+							async (req: Request & { params: { id: string } }) => await this.handleArchiveMilestone(req.params.id),
+						),
 					},
 					"/api/tasks/reorder": {
-						POST: async (req: Request) => await this.handleReorderTask(req),
+						POST: this.protect(async (req: Request) => await this.handleReorderTask(req)),
 					},
 					"/api/tasks/cleanup": {
-						GET: async (req: Request) => await this.handleCleanupPreview(req),
+						GET: this.protect(async (req: Request) => await this.handleCleanupPreview(req)),
 					},
 					"/api/tasks/cleanup/execute": {
-						POST: async (req: Request) => await this.handleCleanupExecute(req),
+						POST: this.protect(async (req: Request) => await this.handleCleanupExecute(req)),
 					},
 					"/api/version": {
-						GET: async () => await this.handleGetVersion(),
+						GET: this.protect(async () => await this.handleGetVersion()),
 					},
 					"/api/statistics": {
-						GET: async () => await this.handleGetStatistics(),
+						GET: this.protect(async () => await this.handleGetStatistics()),
 					},
 					"/api/status": {
-						GET: async () => await this.handleGetStatus(),
+						GET: this.protect(async () => await this.handleGetStatus()),
 					},
 					"/api/init": {
-						POST: async (req: Request) => await this.handleInit(req),
+						POST: this.protect(async (req: Request) => await this.handleInit(req)),
 					},
 					"/api/search": {
-						GET: async (req: Request) => await this.handleSearch(req),
+						GET: this.protect(async (req: Request) => await this.handleSearch(req)),
 					},
 					"/sequences": {
-						GET: async () => await this.handleGetSequences(),
+						GET: this.protect(async () => await this.handleGetSequences()),
 					},
 					"/sequences/move": {
-						POST: async (req: Request) => await this.handleMoveSequence(req),
+						POST: this.protect(async (req: Request) => await this.handleMoveSequence(req)),
 					},
 					"/api/sequences": {
-						GET: async () => await this.handleGetSequences(),
+						GET: this.protect(async () => await this.handleGetSequences()),
 					},
 					"/api/sequences/move": {
-						POST: async (req: Request) => await this.handleMoveSequence(req),
+						POST: this.protect(async (req: Request) => await this.handleMoveSequence(req)),
+					},
+					"/api/auth/status": {
+						GET: async () => {
+							return Response.json({
+								enabled: this.authEnabled,
+								clientId: this.authEnabled ? this.googleClientId : undefined,
+							});
+						},
+					},
+					"/api/auth/google": {
+						POST: async (req: Request) => await this.handleGoogleLogin(req),
+					},
+					"/api/auth/me": {
+						GET: this.protect(async (req: Request) => await this.handleGetMe(req)),
 					},
 					// Serve files placed under backlog/assets at /assets/<relative-path>
 					"/assets/*": {
@@ -497,6 +578,12 @@ export class BacklogServer {
 		try {
 			this.configWatcher?.stop();
 			this.configWatcher = null;
+		} catch {}
+
+		// Stop config repo service
+		try {
+			await this.configRepoService?.stop();
+			this.configRepoService = null;
 		} catch {}
 
 		this.core.disposeSearchService();
@@ -1555,5 +1642,55 @@ export class BacklogServer {
 			const message = error instanceof Error ? error.message : "Failed to initialize project";
 			return Response.json({ error: message }, { status: 500 });
 		}
+	}
+
+	private async handleGoogleLogin(req: Request): Promise<Response> {
+		if (!this.authEnabled || !this.googleClientId || !this.configRepoService) {
+			return Response.json({ error: "Authentication is not enabled" }, { status: 400 });
+		}
+
+		let body: { credential?: string };
+		try {
+			body = await req.json();
+		} catch {
+			return Response.json({ error: "Invalid request body" }, { status: 400 });
+		}
+
+		const credential = body?.credential;
+		if (typeof credential !== "string" || !credential) {
+			return Response.json({ error: "Missing credential" }, { status: 400 });
+		}
+
+		const googleUser = await verifyGoogleToken(credential, this.googleClientId);
+		if (!googleUser) {
+			return Response.json({ error: "Invalid Google token" }, { status: 401 });
+		}
+
+		const user = this.configRepoService.findUserByEmail(googleUser.email);
+		if (!user) {
+			return Response.json({ error: "Your account does not have access" }, { status: 403 });
+		}
+
+		const token = signJwt(
+			{ email: user.email, name: user.name, role: user.role },
+			this.jwtSecret,
+			24 * 60 * 60, // 24 hours
+		);
+
+		return Response.json({ token, user: { email: user.email, name: user.name, role: user.role } });
+	}
+
+	private async handleGetMe(req: Request): Promise<Response> {
+		const token = extractBearerToken(req.headers.get("authorization"));
+		if (!token) {
+			return Response.json({ error: "Not authenticated" }, { status: 401 });
+		}
+
+		const payload = verifyJwt(token, this.jwtSecret);
+		if (!payload) {
+			return Response.json({ error: "Invalid token" }, { status: 401 });
+		}
+
+		return Response.json({ email: payload.email, name: payload.name, role: payload.role });
 	}
 }

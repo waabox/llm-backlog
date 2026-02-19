@@ -8,6 +8,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import {SuccessToast} from './SuccessToast';
 import { useTheme } from '../contexts/ThemeContext';
 import { sanitizeUrlTitle } from '../utils/urlHelpers';
+import { useAuth } from '../contexts/AuthContext';
 
 // Custom MDEditor wrapper for proper height handling
 const MarkdownEditor = memo(function MarkdownEditor({
@@ -67,6 +68,8 @@ interface DocumentationDetailProps {
 }
 
 export default function DocumentationDetail({docs, onRefreshData}: DocumentationDetailProps) {
+    const { user } = useAuth();
+    const isViewer = user?.role === "viewer";
     const {id, title} = useParams<{ id: string; title: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -309,6 +312,7 @@ export default function DocumentationDetail({docs, onRefreshData}: Documentation
                                     )}
                                 </div>
                             </div>
+                            {!isViewer && (
                             <div className="flex items-center space-x-3 ml-6">
                                 {!isEditing ? (
                                     <button
@@ -349,6 +353,7 @@ export default function DocumentationDetail({docs, onRefreshData}: Documentation
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
                     </div>
                 </div>
