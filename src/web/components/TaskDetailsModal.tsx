@@ -9,6 +9,7 @@ import MermaidMarkdown from './MermaidMarkdown';
 import ChipInput from "./ChipInput";
 import DependencyInput from "./DependencyInput";
 import { formatStoredUtcDateForDisplay } from "../utils/date-display";
+import { getMilestoneLabel, resolveMilestoneInput } from "../utils/milestones";
 
 interface Props {
   task?: Task; // Optional for create mode
@@ -87,136 +88,13 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const resolveMilestoneToId = useCallback((value?: string | null): string => {
     const normalized = (value ?? "").trim();
     if (!normalized) return "";
-    const key = normalized.toLowerCase();
-    const aliasKeys = new Set<string>([key]);
-    const looksLikeMilestoneId = /^\d+$/.test(normalized) || /^m-\d+$/i.test(normalized);
-    const canonicalInputId = looksLikeMilestoneId
-      ? `m-${String(Number.parseInt(normalized.replace(/^m-/i, ""), 10))}`
-      : null;
-    if (/^\d+$/.test(normalized)) {
-      const numericAlias = String(Number.parseInt(normalized, 10));
-      aliasKeys.add(numericAlias);
-      aliasKeys.add(`m-${numericAlias}`);
-    } else {
-      const idMatch = normalized.match(/^m-(\d+)$/i);
-      if (idMatch?.[1]) {
-        const numericAlias = String(Number.parseInt(idMatch[1], 10));
-        aliasKeys.add(numericAlias);
-        aliasKeys.add(`m-${numericAlias}`);
-      }
-    }
-    const idMatchesAlias = (milestoneId: string): boolean => {
-      const milestoneKey = milestoneId.trim().toLowerCase();
-      if (aliasKeys.has(milestoneKey)) {
-        return true;
-      }
-      const idMatch = milestoneId.trim().match(/^m-(\d+)$/i);
-      if (!idMatch?.[1]) {
-        return false;
-      }
-      const numericAlias = String(Number.parseInt(idMatch[1], 10));
-      return aliasKeys.has(numericAlias) || aliasKeys.has(`m-${numericAlias}`);
-    };
-    const findIdMatch = (milestones: Milestone[]): Milestone | undefined => {
-      const rawExactMatch = milestones.find((milestone) => milestone.id.trim().toLowerCase() === key);
-      if (rawExactMatch) {
-        return rawExactMatch;
-      }
-      if (canonicalInputId) {
-        const canonicalRawMatch = milestones.find(
-          (milestone) => milestone.id.trim().toLowerCase() === canonicalInputId,
-        );
-        if (canonicalRawMatch) {
-          return canonicalRawMatch;
-        }
-      }
-      return milestones.find((milestone) => idMatchesAlias(milestone.id));
-    };
-    const activeMilestones = milestoneEntities ?? [];
-    const archivedMilestones = archivedMilestoneEntities ?? [];
-    const activeIdMatch = findIdMatch(activeMilestones);
-    if (activeIdMatch) {
-      return activeIdMatch.id;
-    }
-    if (looksLikeMilestoneId) {
-      const archivedIdMatch = findIdMatch(archivedMilestones);
-      if (archivedIdMatch) {
-        return archivedIdMatch.id;
-      }
-    }
-    const activeTitleMatches = activeMilestones.filter((milestone) => milestone.title.trim().toLowerCase() === key);
-    if (activeTitleMatches.length === 1) {
-      return activeTitleMatches[0]?.id ?? normalized;
-    }
-    if (activeTitleMatches.length > 1) {
-      return normalized;
-    }
-    const archivedIdMatch = findIdMatch(archivedMilestones);
-    if (archivedIdMatch) {
-      return archivedIdMatch.id;
-    }
-    const archivedTitleMatches = archivedMilestones.filter((milestone) => milestone.title.trim().toLowerCase() === key);
-    if (archivedTitleMatches.length === 1) {
-      return archivedTitleMatches[0]?.id ?? normalized;
-    }
-    return normalized;
+    return resolveMilestoneInput(normalized, milestoneEntities ?? [], archivedMilestoneEntities ?? []);
   }, [milestoneEntities, archivedMilestoneEntities]);
   const resolveMilestoneLabel = useCallback((value?: string | null): string => {
-    const normalized = (value ?? "").trim();
-    if (!normalized) return "";
-    const key = normalized.toLowerCase();
-    const aliasKeys = new Set<string>([key]);
-    const canonicalInputId =
-      /^\d+$/.test(normalized) || /^m-\d+$/i.test(normalized)
-        ? `m-${String(Number.parseInt(normalized.replace(/^m-/i, ""), 10))}`
-        : null;
-    if (/^\d+$/.test(normalized)) {
-      const numericAlias = String(Number.parseInt(normalized, 10));
-      aliasKeys.add(numericAlias);
-      aliasKeys.add(`m-${numericAlias}`);
-    } else {
-      const idMatch = normalized.match(/^m-(\d+)$/i);
-      if (idMatch?.[1]) {
-        const numericAlias = String(Number.parseInt(idMatch[1], 10));
-        aliasKeys.add(numericAlias);
-        aliasKeys.add(`m-${numericAlias}`);
-      }
-    }
-    const idMatchesAlias = (milestoneId: string): boolean => {
-      const milestoneKey = milestoneId.trim().toLowerCase();
-      if (aliasKeys.has(milestoneKey)) {
-        return true;
-      }
-      const idMatch = milestoneId.trim().match(/^m-(\d+)$/i);
-      if (!idMatch?.[1]) {
-        return false;
-      }
-      const numericAlias = String(Number.parseInt(idMatch[1], 10));
-      return aliasKeys.has(numericAlias) || aliasKeys.has(`m-${numericAlias}`);
-    };
-    const findIdMatch = (milestones: Milestone[]): Milestone | undefined => {
-      const rawExactMatch = milestones.find((milestone) => milestone.id.trim().toLowerCase() === key);
-      if (rawExactMatch) {
-        return rawExactMatch;
-      }
-      if (canonicalInputId) {
-        const canonicalRawMatch = milestones.find(
-          (milestone) => milestone.id.trim().toLowerCase() === canonicalInputId,
-        );
-        if (canonicalRawMatch) {
-          return canonicalRawMatch;
-        }
-      }
-      return milestones.find((milestone) => idMatchesAlias(milestone.id));
-    };
-    const allMilestones = [...(milestoneEntities ?? []), ...(archivedMilestoneEntities ?? [])];
-    const idMatch = findIdMatch(allMilestones);
-    if (idMatch) {
-      return idMatch.title;
-    }
-    const titleMatches = allMilestones.filter((milestone) => milestone.title.trim().toLowerCase() === key);
-    return titleMatches.length === 1 ? (titleMatches[0]?.title ?? normalized) : normalized;
-  }, [milestoneEntities, archivedMilestoneEntities]);
+    const resolved = resolveMilestoneToId(value);
+    if (!resolved) return "";
+    return getMilestoneLabel(resolved, [...(milestoneEntities ?? []), ...(archivedMilestoneEntities ?? [])]);
+  }, [resolveMilestoneToId, milestoneEntities, archivedMilestoneEntities]);
 
   // Sidebar metadata (inline edit)
   const [status, setStatus] = useState(task?.status || (isDraftMode ? "Draft" : (availableStatuses?.[0] || "To Do")));
