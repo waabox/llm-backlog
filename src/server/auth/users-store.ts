@@ -4,6 +4,7 @@ export interface AuthUser {
 	email: string;
 	name: string;
 	role: "admin" | "viewer";
+	apiKey?: string;
 }
 
 /**
@@ -15,6 +16,7 @@ export interface AuthUser {
 export class UsersStore {
 	private readonly filePath: string;
 	private users = new Map<string, AuthUser>();
+	private apiKeys = new Map<string, AuthUser>();
 
 	constructor(filePath: string) {
 		this.filePath = filePath;
@@ -30,6 +32,7 @@ export class UsersStore {
 	 */
 	async load(): Promise<void> {
 		this.users.clear();
+		this.apiKeys.clear();
 
 		const file = Bun.file(this.filePath);
 		if (!(await file.exists())) {
@@ -56,8 +59,13 @@ export class UsersStore {
 			}
 
 			const role: "admin" | "viewer" = entry.role === "admin" ? "admin" : "viewer";
+			const apiKey = typeof entry.apiKey === "string" ? entry.apiKey.trim() : "";
 
-			this.users.set(email.toLowerCase(), { email, name, role });
+			const user: AuthUser = { email, name, role, ...(apiKey.length > 0 ? { apiKey } : {}) };
+			this.users.set(email.toLowerCase(), user);
+			if (apiKey.length > 0) {
+				this.apiKeys.set(apiKey, user);
+			}
 		}
 	}
 
@@ -69,5 +77,17 @@ export class UsersStore {
 	 */
 	findByEmail(email: string): AuthUser | null {
 		return this.users.get(email.toLowerCase()) ?? null;
+	}
+
+	/**
+	 * Looks up a user by API key. Returns null if the key is empty
+	 * or not found.
+	 *
+	 * @param apiKey The API key to search for
+	 * @returns The matching AuthUser or null if not found
+	 */
+	findByApiKey(apiKey: string): AuthUser | null {
+		if (apiKey.length === 0) return null;
+		return this.apiKeys.get(apiKey) ?? null;
 	}
 }

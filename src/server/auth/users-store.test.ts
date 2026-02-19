@@ -160,4 +160,88 @@ describe("UsersStore", () => {
 		expect(editor).not.toBeNull();
 		expect(editor?.role).toBe("viewer");
 	});
+
+	it("parses apiKey field from user entries", async () => {
+		const filePath = join(testDir, "users.md");
+		await Bun.write(
+			filePath,
+			[
+				"---",
+				"users:",
+				"  - email: admin@example.com",
+				"    name: Admin User",
+				"    role: admin",
+				"    apiKey: bkmd_admin123",
+				"  - email: viewer@example.com",
+				"    name: Viewer User",
+				"    role: viewer",
+				"    apiKey: bkmd_viewer456",
+				"---",
+			].join("\n"),
+		);
+
+		const store = new UsersStore(filePath);
+		await store.load();
+
+		const admin = store.findByApiKey("bkmd_admin123");
+		expect(admin).not.toBeNull();
+		expect(admin?.email).toBe("admin@example.com");
+		expect(admin?.role).toBe("admin");
+
+		const viewer = store.findByApiKey("bkmd_viewer456");
+		expect(viewer).not.toBeNull();
+		expect(viewer?.email).toBe("viewer@example.com");
+		expect(viewer?.role).toBe("viewer");
+	});
+
+	it("returns null for unknown API key", async () => {
+		const filePath = join(testDir, "users.md");
+		await Bun.write(
+			filePath,
+			[
+				"---",
+				"users:",
+				"  - email: admin@example.com",
+				"    name: Admin User",
+				"    role: admin",
+				"    apiKey: bkmd_admin123",
+				"---",
+			].join("\n"),
+		);
+
+		const store = new UsersStore(filePath);
+		await store.load();
+
+		expect(store.findByApiKey("bkmd_unknown")).toBeNull();
+		expect(store.findByApiKey("")).toBeNull();
+	});
+
+	it("handles users without apiKey field", async () => {
+		const filePath = join(testDir, "users.md");
+		await Bun.write(
+			filePath,
+			[
+				"---",
+				"users:",
+				"  - email: no-key@example.com",
+				"    name: No Key User",
+				"    role: admin",
+				"  - email: has-key@example.com",
+				"    name: Has Key User",
+				"    role: viewer",
+				"    apiKey: bkmd_haskey789",
+				"---",
+			].join("\n"),
+		);
+
+		const store = new UsersStore(filePath);
+		await store.load();
+
+		const hasKey = store.findByApiKey("bkmd_haskey789");
+		expect(hasKey).not.toBeNull();
+		expect(hasKey?.email).toBe("has-key@example.com");
+
+		const noKey = store.findByEmail("no-key@example.com");
+		expect(noKey).not.toBeNull();
+	});
 });

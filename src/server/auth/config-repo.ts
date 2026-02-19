@@ -62,6 +62,16 @@ export class ConfigRepoService {
 	}
 
 	/**
+	 * Looks up a user by API key.
+	 *
+	 * @param apiKey The API key to search for
+	 * @returns The matching AuthUser or null if not found or service not started
+	 */
+	findUserByApiKey(apiKey: string): AuthUser | null {
+		return this.usersStore?.findByApiKey(apiKey) ?? null;
+	}
+
+	/**
 	 * Stops the poll timer and removes the temporary clone directory.
 	 */
 	async stop(): Promise<void> {
