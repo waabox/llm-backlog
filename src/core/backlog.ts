@@ -10,11 +10,9 @@ import {
 	type Document,
 	EntityType,
 	type Milestone,
-	type SearchFilters,
 	type Sequence,
 	type Task,
 	type TaskCreateInput,
-	type TaskListFilter,
 	type TaskUpdateInput,
 } from "../types/index.ts";
 import { normalizeAssignee } from "../utils/assignee.ts";
@@ -32,7 +30,6 @@ import {
 	validateDependencies,
 } from "../utils/task-builders.ts";
 import { getTaskFilename, getTaskPath, normalizeTaskId, taskIdsEqual } from "../utils/task-path.ts";
-import { attachSubtaskSummaries } from "../utils/task-subtasks.ts";
 import {
 	addAcceptanceCriteria,
 	checkAcceptanceCriteria,
@@ -60,22 +57,21 @@ import { migrateDraftPrefixes, needsDraftPrefixMigration } from "./prefix-migrat
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { SearchService } from "./search-service.ts";
 import { computeSequences, planMoveToSequence, planMoveToUnsequenced } from "./sequences.ts";
+import { type BranchTaskStateEntry, loadLocalBranchTasks, loadRemoteTasks } from "./task-loader.ts";
+import { applyTaskUpdateInput, normalizePriority, sanitizeArchivedTaskLinks } from "./task-mutation.ts";
 import {
-	type BranchTaskStateEntry,
-	findTaskInLocalBranches,
-	findTaskInRemoteBranches,
-	getTaskLoadingMessage,
-	loadLocalBranchTasks,
-	loadRemoteTasks,
-	resolveTaskConflict,
-} from "./task-loader.ts";
-import {
-	applyTaskFilters,
-	applyTaskUpdateInput,
-	filterLocalEditableTasks,
-	normalizePriority,
-	sanitizeArchivedTaskLinks,
-} from "./task-mutation.ts";
+	buildLatestStateMap,
+	getActiveAndCompletedIdsFromStateMap,
+	getTask,
+	getTaskContent,
+	getTaskWithSubtasks,
+	listTasksWithMetadata,
+	loadAllTasksForStatistics,
+	loadTaskById,
+	loadTasks,
+	queryTasks,
+	type TaskQueryOptions,
+} from "./task-query.ts";
 
 interface BlessedScreen {
 	program: {
@@ -98,67 +94,6 @@ interface BlessedScreen {
 	width: number;
 	height: number;
 	emit(event: string): void;
-}
-
-interface TaskQueryOptions {
-	filters?: TaskListFilter;
-	query?: string;
-	limit?: number;
-	includeCrossBranch?: boolean;
-}
-
-function buildLatestStateMap(
-	stateEntries: BranchTaskStateEntry[] = [],
-	localTasks: Array<Task & { lastModified?: Date; updatedDate?: string }> = [],
-): Map<string, BranchTaskStateEntry> {
-	const latest = new Map<string, BranchTaskStateEntry>();
-	const update = (entry: BranchTaskStateEntry) => {
-		const existing = latest.get(entry.id);
-		if (!existing || entry.lastModified > existing.lastModified) {
-			latest.set(entry.id, entry);
-		}
-	};
-
-	for (const entry of stateEntries) {
-		update(entry);
-	}
-
-	for (const task of localTasks) {
-		if (!task.id) continue;
-		const lastModified = task.lastModified ?? (task.updatedDate ? new Date(task.updatedDate) : new Date(0));
-
-		update({
-			id: task.id,
-			type: "task",
-			branch: "local",
-			path: "",
-			lastModified,
-		});
-	}
-
-	return latest;
-}
-
-function filterTasksByStateSnapshots(tasks: Task[], latestState: Map<string, BranchTaskStateEntry>): Task[] {
-	return tasks.filter((task) => {
-		const latest = latestState.get(task.id);
-		if (!latest) return true;
-		return latest.type === "task";
-	});
-}
-
-/**
- * Extract IDs from state map where latest state is "task" or "completed" (not "archived" or "draft")
- * Used for ID generation to determine which IDs are in use.
- */
-function getActiveAndCompletedIdsFromStateMap(latestState: Map<string, BranchTaskStateEntry>): string[] {
-	const ids: string[] = [];
-	for (const [id, entry] of latestState) {
-		if (entry.type === "task" || entry.type === "completed") {
-			ids.push(id);
-		}
-	}
-	return ids;
 }
 
 export class Core {
@@ -205,118 +140,23 @@ export class Core {
 	}
 
 	async queryTasks(options: TaskQueryOptions = {}): Promise<Task[]> {
-		const { filters, query, limit } = options;
-		const trimmedQuery = query?.trim();
-		const includeCrossBranch = options.includeCrossBranch ?? true;
-
-		const applyFiltersAndLimit = (collection: Task[]): Task[] => {
-			let filtered = applyTaskFilters(collection, filters);
-			if (!includeCrossBranch) {
-				filtered = filterLocalEditableTasks(filtered);
-			}
-			if (typeof limit === "number" && limit >= 0) {
-				return filtered.slice(0, limit);
-			}
-			return filtered;
-		};
-
-		if (!trimmedQuery) {
-			const store = await this.getContentStore();
-			const tasks = store.getTasks();
-			return applyFiltersAndLimit(tasks);
-		}
-
-		const searchService = await this.getSearchService();
-		const searchFilters: SearchFilters = {};
-		if (filters?.status) {
-			searchFilters.status = filters.status;
-		}
-		if (filters?.priority) {
-			searchFilters.priority = filters.priority;
-		}
-		if (filters?.assignee) {
-			searchFilters.assignee = filters.assignee;
-		}
-		if (filters?.labels) {
-			searchFilters.labels = filters.labels;
-		}
-
-		const searchResults = searchService.search({
-			query: trimmedQuery,
-			limit,
-			types: ["task"],
-			filters: Object.keys(searchFilters).length > 0 ? searchFilters : undefined,
-		});
-
-		const seen = new Set<string>();
-		const tasks: Task[] = [];
-		for (const result of searchResults) {
-			if (result.type !== "task") continue;
-			const task = result.task;
-			if (seen.has(task.id)) continue;
-			seen.add(task.id);
-			tasks.push(task);
-		}
-
-		return applyFiltersAndLimit(tasks);
+		return queryTasks(this, options);
 	}
 
 	async getTask(taskId: string): Promise<Task | null> {
-		const store = await this.getContentStore();
-		const tasks = store.getTasks();
-		const match = tasks.find((task) => taskIdsEqual(taskId, task.id));
-		if (match) {
-			return match;
-		}
-
-		// Pass raw ID to loadTask - it will handle prefix detection via getTaskPath
-		return await this.fs.loadTask(taskId);
+		return getTask(this, taskId);
 	}
 
 	async getTaskWithSubtasks(taskId: string, localTasks?: Task[]): Promise<Task | null> {
-		const task = await this.loadTaskById(taskId);
-		if (!task) {
-			return null;
-		}
-
-		const tasks = localTasks ?? (await this.fs.listTasks());
-		return attachSubtaskSummaries(task, tasks);
+		return getTaskWithSubtasks(this, taskId, localTasks);
 	}
 
 	async loadTaskById(taskId: string): Promise<Task | null> {
-		// Pass raw ID to loadTask - it will handle prefix detection via getTaskPath
-		const localTask = await this.fs.loadTask(taskId);
-		if (localTask) return localTask;
-
-		// Check config for remote operations
-		const config = await this.fs.loadConfig();
-		const sinceDays = config?.activeBranchDays ?? 30;
-		const taskPrefix = config?.prefixes?.task ?? "task";
-
-		// For cross-branch search, normalize with configured prefix
-		const canonicalId = normalizeTaskId(taskId, taskPrefix);
-
-		// Try other local branches first (faster than remote)
-		const localBranchTask = await findTaskInLocalBranches(
-			this.git,
-			canonicalId,
-			DEFAULT_DIRECTORIES.BACKLOG,
-			sinceDays,
-			taskPrefix,
-		);
-		if (localBranchTask) return localBranchTask;
-
-		// Skip remote if disabled
-		if (config?.remoteOperations === false) return null;
-
-		// Try remote branches
-		return await findTaskInRemoteBranches(this.git, canonicalId, DEFAULT_DIRECTORIES.BACKLOG, sinceDays, taskPrefix);
+		return loadTaskById(this, taskId);
 	}
 
 	async getTaskContent(taskId: string): Promise<string | null> {
-		const filePath = await getTaskPath(taskId, this);
-		if (!filePath) return null;
-		return await Bun.file(filePath).text();
+		return getTaskContent(this, taskId);
 	}
 
 	async getDocument(documentId: string): Promise<Document | null> {
@@ -1467,26 +1307,7 @@ export class Core {
 	async listTasksWithMetadata(
 		includeBranchMeta = false,
 	): Promise<Array<Task & { lastModified?: Date; branch?: string }>> {
-		const tasks = await this.fs.listTasks();
-		return await Promise.all(
-			tasks.map(async (task) => {
-				const filePath = await getTaskPath(task.id, this);
-
-				if (filePath) {
-					const bunFile = Bun.file(filePath);
-					const stats = await bunFile.stat();
-					return {
-						...task,
-						lastModified: new Date(stats.mtime),
-						// Only include branch if explicitly requested
-						...(includeBranchMeta && {
-							branch: (await this.git.getFileLastModifiedBranch(filePath)) || undefined,
-						}),
-					};
-				}
-				return task;
-			}),
-		);
+		return listTasksWithMetadata(this, includeBranchMeta);
 	}
 
 	/**
@@ -1553,75 +1374,7 @@ export class Core {
 	async loadAllTasksForStatistics(
 		progressCallback?: (msg: string) => void,
 	): Promise<{ tasks: Task[]; drafts: Task[]; statuses: string[] }> {
-		const config = await this.fs.loadConfig();
-		const statuses = (config?.statuses || DEFAULT_STATUSES) as string[];
-		const resolutionStrategy = config?.taskResolutionStrategy || "most_progressed";
-
-		// Load local and completed tasks first
-		progressCallback?.("Loading local tasks...");
-		const [localTasks, completedTasks] = await Promise.all([
-			this.listTasksWithMetadata(),
-			this.fs.listCompletedTasks(),
-		]);
-
-		// Load remote tasks and local branch tasks in parallel
-		const branchStateEntries: BranchTaskStateEntry[] | undefined =
-			config?.checkActiveBranches === false ? undefined : [];
-		const [remoteTasks, localBranchTasks] = await Promise.all([
-			loadRemoteTasks(this.git, config, progressCallback, localTasks, branchStateEntries),
-			loadLocalBranchTasks(this.git, config, progressCallback, localTasks, branchStateEntries),
-		]);
-		progressCallback?.("Loaded tasks");
-
-		// Create map with local tasks
-		const tasksById = new Map<string, Task>(localTasks.map((t) => [t.id, { ...t, source: "local" }]));
-
-		// Add completed tasks to the map
-		for (const completedTask of completedTasks) {
-			if (!tasksById.has(completedTask.id)) {
-				tasksById.set(completedTask.id, { ...completedTask, source: "completed" });
-			}
-		}
-
-		// Merge tasks from other local branches
-		progressCallback?.("Merging tasks...");
-		for (const branchTask of localBranchTasks) {
-			const existing = tasksById.get(branchTask.id);
-			if (!existing) {
-				tasksById.set(branchTask.id, branchTask);
-			} else {
-				const resolved = resolveTaskConflict(existing, branchTask, statuses, resolutionStrategy);
-				tasksById.set(branchTask.id, resolved);
-			}
-		}
-
-		// Merge remote tasks with local tasks
-		for (const remoteTask of remoteTasks) {
-			const existing = tasksById.get(remoteTask.id);
-			if (!existing) {
-				tasksById.set(remoteTask.id, remoteTask);
-			} else {
-				const resolved = resolveTaskConflict(existing, remoteTask, statuses, resolutionStrategy);
-				tasksById.set(remoteTask.id, resolved);
-			}
-		}
-
-		// Get all tasks as array
-		const tasks = Array.from(tasksById.values());
-		let activeTasks: Task[];
-
-		if (config?.checkActiveBranches === false) {
-			activeTasks = tasks;
-		} else {
-			progressCallback?.("Applying latest task states from branch scans...");
-			activeTasks = filterTasksByStateSnapshots(tasks, buildLatestStateMap(branchStateEntries || [], localTasks));
-		}
-
-		// Load drafts
-		progressCallback?.("Loading drafts...");
-		const drafts = await this.fs.listDrafts();
-
-		return { tasks: activeTasks, drafts, statuses: statuses as string[] };
+		return loadAllTasksForStatistics(this, progressCallback);
 	}
 
 	/**
@@ -1633,140 +1386,6 @@ export class Core {
 		abortSignal?: AbortSignal,
 		options?: { includeCompleted?: boolean },
 	): Promise<Task[]> {
-		const config = await this.fs.loadConfig();
-		const statuses = config?.statuses || [...DEFAULT_STATUSES];
-		const resolutionStrategy = config?.taskResolutionStrategy || "most_progressed";
-		const includeCompleted = options?.includeCompleted ?? false;
-
-		// Check for cancellation
-		if (abortSignal?.aborted) {
-			throw new Error("Loading cancelled");
-		}
-
-		// Load local filesystem tasks first (needed for optimization)
-		const [localTasks, completedTasks] = await Promise.all([
-			this.listTasksWithMetadata(),
-			includeCompleted ? this.fs.listCompletedTasks() : Promise.resolve([]),
-		]);
-
-		// Check for cancellation
-		if (abortSignal?.aborted) {
-			throw new Error("Loading cancelled");
-		}
-
-		// Load tasks from remote branches and other local branches in parallel
-		progressCallback?.(getTaskLoadingMessage(config));
-
-		const branchStateEntries: BranchTaskStateEntry[] | undefined =
-			config?.checkActiveBranches === false ? undefined : [];
-		const [remoteTasks, localBranchTasks] = await Promise.all([
-			loadRemoteTasks(this.git, config, progressCallback, localTasks, branchStateEntries, includeCompleted),
-			loadLocalBranchTasks(this.git, config, progressCallback, localTasks, branchStateEntries, includeCompleted),
-		]);
-
-		// Check for cancellation after loading
-		if (abortSignal?.aborted) {
-			throw new Error("Loading cancelled");
-		}
-
-		// Create map with local tasks (current branch filesystem)
-		const tasksById = new Map<string, Task>(localTasks.map((t) => [t.id, { ...t, source: "local" }]));
-
-		// Add local completed tasks when requested
-		if (includeCompleted) {
-			for (const completedTask of completedTasks) {
-				tasksById.set(completedTask.id, { ...completedTask, source: "completed" });
-			}
-		}
-
-		// Merge tasks from other local branches
-		for (const branchTask of localBranchTasks) {
-			if (abortSignal?.aborted) {
-				throw new Error("Loading cancelled");
-			}
-
-			const existing = tasksById.get(branchTask.id);
-			if (!existing) {
-				tasksById.set(branchTask.id, branchTask);
-			} else {
-				const resolved = resolveTaskConflict(existing, branchTask, statuses, resolutionStrategy);
-				tasksById.set(branchTask.id, resolved);
-			}
-		}
-
-		// Merge remote tasks with local tasks
-		for (const remoteTask of remoteTasks) {
-			// Check for cancellation during merge
-			if (abortSignal?.aborted) {
-				throw new Error("Loading cancelled");
-			}
-
-			const existing = tasksById.get(remoteTask.id);
-			if (!existing) {
-				tasksById.set(remoteTask.id, remoteTask);
-			} else {
-				const resolved = resolveTaskConflict(existing, remoteTask, statuses, resolutionStrategy);
-				tasksById.set(remoteTask.id, resolved);
-			}
-		}
-
-		// Check for cancellation before cross-branch checking
-		if (abortSignal?.aborted) {
-			throw new Error("Loading cancelled");
-		}
-
-		// Get the latest directory location of each task across all branches
-		const tasks = Array.from(tasksById.values());
-
-		if (abortSignal?.aborted) {
-			throw new Error("Loading cancelled");
-		}
-
-		let filteredTasks: Task[];
-
-		if (config?.checkActiveBranches === false) {
-			filteredTasks = tasks;
-		} else {
-			progressCallback?.("Applying latest task states from branch scans...");
-			if (!includeCompleted) {
-				filteredTasks = filterTasksByStateSnapshots(tasks, buildLatestStateMap(branchStateEntries || [], localTasks));
-			} else {
-				const stateEntries = branchStateEntries || [];
-				for (const completedTask of completedTasks) {
-					if (!completedTask.id) continue;
-					const lastModified = completedTask.updatedDate ? new Date(completedTask.updatedDate) : new Date(0);
-					stateEntries.push({
-						id: completedTask.id,
-						type: "completed",
-						branch: "local",
-						path: "",
-						lastModified,
-					});
-				}
-
-				const latestState = buildLatestStateMap(stateEntries, localTasks);
-				const completedIds = new Set<string>();
-				for (const [id, entry] of latestState) {
-					if (entry.type === "completed") {
-						completedIds.add(id);
-					}
-				}
-
-				filteredTasks = tasks
-					.filter((task) => {
-						const latest = latestState.get(task.id);
-						if (!latest) return true;
-						return latest.type === "task" || latest.type === "completed";
-					})
-					.map((task) => {
-						if (!completedIds.has(task.id)) {
-							return task;
-						}
-						return { ...task, source: "completed" };
-					});
-			}
-		}
-
-		return filteredTasks;
+		return loadTasks(this, progressCallback, abortSignal, options);
 	}
 }
