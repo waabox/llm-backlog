@@ -1,39 +1,39 @@
 import { mkdir, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DEFAULT_DIRECTORIES, DEFAULT_FILES } from "../constants/index.ts";
-import { parseDecision, parseDocument, parseMilestone, parseTask } from "../markdown/parser.ts";
-import { serializeDecision, serializeDocument, serializeTask } from "../markdown/serializer.ts";
+import { parseDecision, parseDocument, parseMilestone } from "../markdown/parser.ts";
+import { serializeDecision, serializeDocument } from "../markdown/serializer.ts";
 import type { BacklogConfig, Decision, Document, Milestone, Task, TaskListFilter } from "../types/index.ts";
 import { documentIdsEqual, normalizeDocumentId } from "../utils/document-id.ts";
-import {
-	buildGlobPattern,
-	extractAnyPrefix,
-	generateNextId,
-	idForFilename,
-	normalizeId,
-} from "../utils/prefix-config.ts";
-import { getTaskFilename, getTaskPath, normalizeTaskIdentity } from "../utils/task-path.ts";
+import { generateNextId } from "../utils/prefix-config.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { ConfigStore } from "./config-store.ts";
+import { DraftStore } from "./draft-store.ts";
 import { ensureDirectoryExists, sanitizeFilename } from "./shared.ts";
-
-// Interface for task path resolution context
-interface TaskPathContext {
-	filesystem: {
-		tasksDir: string;
-	};
-}
+import { TaskStore } from "./task-store.ts";
 
 export class FileSystem {
 	private readonly backlogDir: string;
 	private readonly projectRoot: string;
 	private readonly configStore: ConfigStore;
+	private readonly taskStore: TaskStore;
+	private readonly draftStore: DraftStore;
 	private migrationChecked = false;
 
 	constructor(projectRoot: string) {
 		this.projectRoot = projectRoot;
 		this.backlogDir = join(projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
 		this.configStore = new ConfigStore(projectRoot, this.backlogDir);
+		this.taskStore = new TaskStore(
+			join(this.backlogDir, DEFAULT_DIRECTORIES.TASKS),
+			join(this.backlogDir, DEFAULT_DIRECTORIES.COMPLETED),
+			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_TASKS),
+			() => this.loadConfig(),
+		);
+		this.draftStore = new DraftStore(
+			join(this.backlogDir, DEFAULT_DIRECTORIES.DRAFTS),
+			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_DRAFTS),
+		);
 	}
 
 	private async getBacklogDir(): Promise<string> {
@@ -85,11 +85,6 @@ export class FileSystem {
 		this.configStore.invalidateConfigCache();
 	}
 
-	private async getTasksDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.TASKS);
-	}
-
 	async getDraftsDir(): Promise<string> {
 		const backlogDir = await this.getBacklogDir();
 		return join(backlogDir, DEFAULT_DIRECTORIES.DRAFTS);
@@ -105,11 +100,6 @@ export class FileSystem {
 		return join(backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_MILESTONES);
 	}
 
-	private async getArchiveDraftsDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_DRAFTS);
-	}
-
 	private async getDecisionsDir(): Promise<string> {
 		const backlogDir = await this.getBacklogDir();
 		return join(backlogDir, DEFAULT_DIRECTORIES.DECISIONS);
@@ -123,11 +113,6 @@ export class FileSystem {
 	private async getMilestonesDir(): Promise<string> {
 		const backlogDir = await this.getBacklogDir();
 		return join(backlogDir, DEFAULT_DIRECTORIES.MILESTONES);
-	}
-
-	private async getCompletedDir(): Promise<string> {
-		const backlogDir = await this.getBacklogDir();
-		return join(backlogDir, DEFAULT_DIRECTORIES.COMPLETED);
 	}
 
 	async ensureBacklogStructure(): Promise<void> {
@@ -150,263 +135,57 @@ export class FileSystem {
 		}
 	}
 
-	// Task operations
+	// Task operations - delegated to TaskStore
 	async saveTask(task: Task): Promise<string> {
-		// Extract prefix from task ID, or use configured prefix, or fall back to default "task"
-		let prefix = extractAnyPrefix(task.id);
-		if (!prefix) {
-			const config = await this.loadConfig();
-			prefix = config?.prefixes?.task ?? "task";
-		}
-		const taskId = normalizeId(task.id, prefix);
-		const filename = `${idForFilename(taskId)} - ${sanitizeFilename(task.title)}.md`;
-		const tasksDir = await this.getTasksDir();
-		const filepath = join(tasksDir, filename);
-		// Normalize task ID and parentTaskId to uppercase before serialization
-		const normalizedTask = {
-			...task,
-			id: taskId,
-			parentTaskId: task.parentTaskId
-				? normalizeId(task.parentTaskId, extractAnyPrefix(task.parentTaskId) ?? prefix)
-				: undefined,
-		};
-		const content = serializeTask(normalizedTask);
-
-		// Delete any existing task files with the same ID but different filenames
-		try {
-			const core = { filesystem: { tasksDir } };
-			const existingPath = await getTaskPath(taskId, core as TaskPathContext);
-			if (existingPath && !existingPath.endsWith(filename)) {
-				await unlink(existingPath);
-			}
-		} catch {
-			// Ignore errors if no existing files found
-		}
-
-		await ensureDirectoryExists(dirname(filepath));
-		await Bun.write(filepath, content);
-		return filepath;
+		return this.taskStore.saveTask(task);
 	}
 
 	async loadTask(taskId: string): Promise<Task | null> {
-		try {
-			const tasksDir = await this.getTasksDir();
-			const core = { filesystem: { tasksDir } };
-			const filepath = await getTaskPath(taskId, core as TaskPathContext);
-
-			if (!filepath) return null;
-
-			const content = await Bun.file(filepath).text();
-			const task = normalizeTaskIdentity(parseTask(content));
-			return { ...task, filePath: filepath };
-		} catch (_error) {
-			return null;
-		}
+		return this.taskStore.loadTask(taskId);
 	}
 
 	async listTasks(filter?: TaskListFilter): Promise<Task[]> {
-		let tasksDir: string;
-		try {
-			tasksDir = await this.getTasksDir();
-		} catch (_error) {
-			return [];
-		}
-
-		// Get configured task prefix
-		const config = await this.loadConfig();
-		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
-		const globPattern = buildGlobPattern(taskPrefix);
-
-		let taskFiles: string[];
-		try {
-			taskFiles = await Array.fromAsync(new Bun.Glob(globPattern).scan({ cwd: tasksDir, followSymlinks: true }));
-		} catch (_error) {
-			return [];
-		}
-
-		let tasks: Task[] = [];
-		for (const file of taskFiles) {
-			const filepath = join(tasksDir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const task = normalizeTaskIdentity(parseTask(content));
-				tasks.push({ ...task, filePath: filepath });
-			} catch (error) {
-				if (process.env.DEBUG) {
-					console.error(`Failed to parse task file ${filepath}`, error);
-				}
-			}
-		}
-
-		if (filter?.status) {
-			const statusLower = filter.status.toLowerCase();
-			tasks = tasks.filter((t) => t.status.toLowerCase() === statusLower);
-		}
-
-		if (filter?.assignee) {
-			const assignee = filter.assignee;
-			tasks = tasks.filter((t) => t.assignee.includes(assignee));
-		}
-
-		return sortByTaskId(tasks);
+		return this.taskStore.listTasks(filter);
 	}
 
 	async listCompletedTasks(): Promise<Task[]> {
-		let completedDir: string;
-		try {
-			completedDir = await this.getCompletedDir();
-		} catch (_error) {
-			return [];
-		}
-
-		// Get configured task prefix
-		const config = await this.loadConfig();
-		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
-		const globPattern = buildGlobPattern(taskPrefix);
-
-		let taskFiles: string[];
-		try {
-			taskFiles = await Array.fromAsync(new Bun.Glob(globPattern).scan({ cwd: completedDir, followSymlinks: true }));
-		} catch (_error) {
-			return [];
-		}
-
-		const tasks: Task[] = [];
-		for (const file of taskFiles) {
-			const filepath = join(completedDir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const task = parseTask(content);
-				tasks.push({ ...task, filePath: filepath });
-			} catch (error) {
-				if (process.env.DEBUG) {
-					console.error(`Failed to parse completed task file ${filepath}`, error);
-				}
-			}
-		}
-
-		return sortByTaskId(tasks);
+		return this.taskStore.listCompletedTasks();
 	}
 
 	async listArchivedTasks(): Promise<Task[]> {
-		let archiveTasksDir: string;
-		try {
-			archiveTasksDir = await this.getArchiveTasksDir();
-		} catch (_error) {
-			return [];
-		}
-
-		// Get configured task prefix
-		const config = await this.loadConfig();
-		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
-		const globPattern = buildGlobPattern(taskPrefix);
-
-		let taskFiles: string[];
-		try {
-			taskFiles = await Array.fromAsync(new Bun.Glob(globPattern).scan({ cwd: archiveTasksDir, followSymlinks: true }));
-		} catch (_error) {
-			return [];
-		}
-
-		const tasks: Task[] = [];
-		for (const file of taskFiles) {
-			const filepath = join(archiveTasksDir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const task = parseTask(content);
-				tasks.push({ ...task, filePath: filepath });
-			} catch (error) {
-				if (process.env.DEBUG) {
-					console.error(`Failed to parse archived task file ${filepath}`, error);
-				}
-			}
-		}
-
-		return sortByTaskId(tasks);
+		return this.taskStore.listArchivedTasks();
 	}
 
 	async archiveTask(taskId: string): Promise<boolean> {
-		try {
-			const tasksDir = await this.getTasksDir();
-			const archiveTasksDir = await this.getArchiveTasksDir();
-			const core = { filesystem: { tasksDir } };
-			const sourcePath = await getTaskPath(taskId, core as TaskPathContext);
-			const taskFile = await getTaskFilename(taskId, core as TaskPathContext);
-
-			if (!sourcePath || !taskFile) return false;
-
-			const targetPath = join(archiveTasksDir, taskFile);
-
-			// Ensure target directory exists
-			await ensureDirectoryExists(dirname(targetPath));
-
-			// Use rename for proper Git move detection
-			await rename(sourcePath, targetPath);
-
-			return true;
-		} catch (_error) {
-			return false;
-		}
+		return this.taskStore.archiveTask(taskId);
 	}
 
 	async completeTask(taskId: string): Promise<boolean> {
-		try {
-			const tasksDir = await this.getTasksDir();
-			const completedDir = await this.getCompletedDir();
-			const core = { filesystem: { tasksDir } };
-			const sourcePath = await getTaskPath(taskId, core as TaskPathContext);
-			const taskFile = await getTaskFilename(taskId, core as TaskPathContext);
+		return this.taskStore.completeTask(taskId);
+	}
 
-			if (!sourcePath || !taskFile) return false;
+	// Draft operations - delegated to DraftStore
+	async saveDraft(task: Task): Promise<string> {
+		return this.draftStore.saveDraft(task);
+	}
 
-			const targetPath = join(completedDir, taskFile);
+	async loadDraft(draftId: string): Promise<Task | null> {
+		return this.draftStore.loadDraft(draftId);
+	}
 
-			// Ensure target directory exists
-			await ensureDirectoryExists(dirname(targetPath));
-
-			// Use rename for proper Git move detection
-			await rename(sourcePath, targetPath);
-
-			return true;
-		} catch (_error) {
-			return false;
-		}
+	async listDrafts(): Promise<Task[]> {
+		return this.draftStore.listDrafts();
 	}
 
 	async archiveDraft(draftId: string): Promise<boolean> {
-		try {
-			const draftsDir = await this.getDraftsDir();
-			const archiveDraftsDir = await this.getArchiveDraftsDir();
-
-			// Find draft file with draft- prefix
-			const files = await Array.fromAsync(
-				new Bun.Glob(buildGlobPattern("draft")).scan({ cwd: draftsDir, followSymlinks: true }),
-			);
-			const normalizedId = normalizeId(draftId, "draft");
-			const filenameId = idForFilename(normalizedId);
-			const draftFile = files.find((f) => f.startsWith(`${filenameId} -`) || f.startsWith(`${filenameId}-`));
-
-			if (!draftFile) return false;
-
-			const sourcePath = join(draftsDir, draftFile);
-			const targetPath = join(archiveDraftsDir, draftFile);
-
-			const content = await Bun.file(sourcePath).text();
-			await ensureDirectoryExists(dirname(targetPath));
-			await Bun.write(targetPath, content);
-
-			await unlink(sourcePath);
-
-			return true;
-		} catch {
-			return false;
-		}
+		return this.draftStore.archiveDraft(draftId);
 	}
 
+	// Cross-entity operations (task <-> draft) stay on FileSystem
 	async promoteDraft(draftId: string): Promise<boolean> {
 		try {
 			// Load the draft
-			const draft = await this.loadDraft(draftId);
+			const draft = await this.draftStore.loadDraft(draftId);
 			if (!draft || !draft.filePath) return false;
 
 			// Get task prefix from config (default: "task")
@@ -415,8 +194,8 @@ export class FileSystem {
 
 			// Get existing task IDs to generate next ID
 			// Include both active and completed tasks to prevent ID collisions
-			const existingTasks = await this.listTasks();
-			const completedTasks = await this.listCompletedTasks();
+			const existingTasks = await this.taskStore.listTasks();
+			const completedTasks = await this.taskStore.listCompletedTasks();
 			const existingIds = [...existingTasks, ...completedTasks].map((t) => t.id);
 
 			// Generate new task ID
@@ -429,7 +208,7 @@ export class FileSystem {
 				filePath: undefined, // Will be set by saveTask
 			};
 
-			await this.saveTask(promotedTask);
+			await this.taskStore.saveTask(promotedTask);
 
 			// Delete old draft file
 			await unlink(draft.filePath);
@@ -443,12 +222,12 @@ export class FileSystem {
 	async demoteTask(taskId: string): Promise<boolean> {
 		try {
 			// Load the task
-			const task = await this.loadTask(taskId);
+			const task = await this.taskStore.loadTask(taskId);
 			if (!task || !task.filePath) return false;
 
 			// Get existing draft IDs to generate next ID
 			// Draft prefix is always "draft" (not configurable like task prefix)
-			const existingDrafts = await this.listDrafts();
+			const existingDrafts = await this.draftStore.listDrafts();
 			const existingIds = existingDrafts.map((d) => d.id);
 
 			// Generate new draft ID
@@ -462,7 +241,7 @@ export class FileSystem {
 				filePath: undefined, // Will be set by saveDraft
 			};
 
-			await this.saveDraft(demotedDraft);
+			await this.draftStore.saveDraft(demotedDraft);
 
 			// Delete old task file
 			await unlink(task.filePath);
@@ -470,79 +249,6 @@ export class FileSystem {
 			return true;
 		} catch {
 			return false;
-		}
-	}
-
-	// Draft operations
-	async saveDraft(task: Task): Promise<string> {
-		const draftId = normalizeId(task.id, "draft");
-		const filename = `${idForFilename(draftId)} - ${sanitizeFilename(task.title)}.md`;
-		const draftsDir = await this.getDraftsDir();
-		const filepath = join(draftsDir, filename);
-		// Normalize the draft ID to uppercase before serialization
-		const normalizedTask = { ...task, id: draftId };
-		const content = serializeTask(normalizedTask);
-
-		try {
-			// Find existing draft file with same ID but possibly different filename (e.g., title changed)
-			const filenameId = idForFilename(draftId);
-			const existingFiles = await Array.fromAsync(
-				new Bun.Glob(buildGlobPattern("draft")).scan({ cwd: draftsDir, followSymlinks: true }),
-			);
-			const existingFile = existingFiles.find((f) => f.startsWith(`${filenameId} -`) || f.startsWith(`${filenameId}-`));
-			if (existingFile && existingFile !== filename) {
-				await unlink(join(draftsDir, existingFile));
-			}
-		} catch {
-			// Ignore errors if no existing files found
-		}
-
-		await ensureDirectoryExists(dirname(filepath));
-		await Bun.write(filepath, content);
-		return filepath;
-	}
-
-	async loadDraft(draftId: string): Promise<Task | null> {
-		try {
-			const draftsDir = await this.getDraftsDir();
-			// Search for draft files with draft- prefix
-			const files = await Array.fromAsync(
-				new Bun.Glob(buildGlobPattern("draft")).scan({ cwd: draftsDir, followSymlinks: true }),
-			);
-			const normalizedId = normalizeId(draftId, "draft");
-			const filenameId = idForFilename(normalizedId);
-
-			// Find matching draft file
-			const draftFile = files.find((f) => f.startsWith(`${filenameId} -`) || f.startsWith(`${filenameId}-`));
-			if (!draftFile) return null;
-
-			const filepath = join(draftsDir, draftFile);
-			const content = await Bun.file(filepath).text();
-			const task = normalizeTaskIdentity(parseTask(content));
-			return { ...task, filePath: filepath };
-		} catch {
-			return null;
-		}
-	}
-
-	async listDrafts(): Promise<Task[]> {
-		try {
-			const draftsDir = await this.getDraftsDir();
-			const taskFiles = await Array.fromAsync(
-				new Bun.Glob(buildGlobPattern("draft")).scan({ cwd: draftsDir, followSymlinks: true }),
-			);
-
-			const tasks: Task[] = [];
-			for (const file of taskFiles) {
-				const filepath = join(draftsDir, file);
-				const content = await Bun.file(filepath).text();
-				const task = normalizeTaskIdentity(parseTask(content));
-				tasks.push({ ...task, filePath: filepath });
-			}
-
-			return sortByTaskId(tasks);
-		} catch {
-			return [];
 		}
 	}
 
