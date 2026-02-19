@@ -89,6 +89,59 @@ CLAUDECODE=1 bun test --timeout 180000 # Full test suite (failures-only output)
   - **Branching**: Use feature branches when working on tasks (e.g. `tasks/task-123-feature-name`)
   - **PR titles**: Use `{taskId} - {taskTitle}` (e.g. `BACK-123 - Title of the task`)
 
+### Source Directory Layout
+
+```
+src/
+  cli.ts                  # Thin shell (~150 lines): splash, config migration, command wiring
+  index.ts                # Core re-exports
+  commands/               # CLI command modules (one file per command group)
+    shared.ts             # Common CLI utilities (requireProjectRoot, isPlainRequested, etc.)
+    task-helpers.ts       # Shared task-building functions (buildTaskFromOptions, normalizeDependencies)
+    task.ts               # task create/list/edit/view/archive/demote
+    init.ts               # project initialization
+    config.ts             # configuration management
+    search.ts             # top-level search
+    board.ts              # kanban board views and export
+    draft.ts              # draft management
+    cleanup.ts            # completed task cleanup
+    doc.ts                # document management
+    milestone.ts          # milestone management
+    agents.ts             # agent instruction management
+    sequence.ts           # task sequences
+    decision.ts           # decision records
+    browser.ts            # web UI server
+    overview.ts           # project statistics
+    mcp.ts                # MCP server registration
+    completion.ts         # shell completion
+    advanced-config-wizard.ts
+    configure-advanced-settings.ts
+  core/                   # Domain layer (Core class, search, content store, milestones, sequences)
+  file-system/            # FileSystem class for backlog directory operations
+  git/                    # GitOperations
+  markdown/               # Markdown parser and serializer
+  mcp/                    # MCP server, tools, and HTTP transport
+    tools/                # MCP tool handlers grouped by domain (tasks/, milestones/, documents/)
+    utils/                # MCP-specific utilities (milestone resolution, task response formatting)
+    auth/                 # MCP auth (API key, role-based tool filtering)
+  server/                 # BacklogServer (web UI backend + OAuth)
+  types/                  # TypeScript type definitions
+  utils/                  # Shared utilities (id-generators, task-search, task-path, status, etc.)
+  ui/                     # TUI components (board, task viewer, loading screens)
+  web/                    # React frontend (components, contexts, hooks)
+  formatters/             # Output formatters (plain text)
+  constants/              # Shared constants
+  guidelines/             # Agent instruction templates
+  test/                   # All test files (flat directory)
+```
+
+### Key Architectural Rules
+- **cli.ts is a thin shell**: All command logic lives in `src/commands/`. Do NOT add business logic to cli.ts.
+- **One command per file**: Each CLI command group has its own file in `src/commands/`.
+- **Shared helpers go in shared.ts or task-helpers.ts**: Do NOT duplicate utility functions across command files.
+- **No circular dependencies**: `core/` must NEVER import from `commands/` or `cli.ts`. Use `utils/` for shared logic.
+- **Canonical utility locations**: `stripPrefix`/`parseTaskIdSegments` in `utils/task-search.ts`, `milestoneKey`/`normalizeMilestoneName` in `core/milestones.ts`, ID generators in `utils/id-generators.ts`.
+
 ## Code Standards
 - **Runtime**: Bun with TypeScript 5
 - **Formatting**: Biome with tab indentation and double quotes
@@ -99,9 +152,11 @@ CLAUDECODE=1 bun test --timeout 180000 # Full test suite (failures-only output)
 The pre-commit hook automatically runs `biome check --write` on staged files to ensure code quality. If linting errors are found, the commit will be blocked until fixed.
 
 ## Architecture Guidelines
-- **Separation of Concerns**: CLI logic and utility functions are kept separate to avoid side effects during testing
+- **Separation of Concerns**: CLI command logic lives in `src/commands/`, domain logic in `src/core/`, utilities in `src/utils/`
 - **Utility Functions**: Reusable utility functions (like ID generators) are placed in `src/utils/` directory
 - **No Side Effects on Import**: Modules should not execute CLI code when imported by other modules or tests
+- **No Duplication**: Before adding a helper function, check if it already exists in `src/utils/` or `src/commands/shared.ts`
+- **Command Pattern**: New CLI commands go in `src/commands/<name>.ts` exporting `registerXCommand(program: Command)`
 - **Branching**: Use feature branches when working on tasks (e.g. `tasks/back-123-feature-name`)
 - **Committing**: Use the following format: `BACK-123 - Title of the task`
 - **Github CLI**: Use `gh` whenever possible for PRs and issues
