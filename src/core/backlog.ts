@@ -18,7 +18,6 @@ import {
 	type TaskUpdateInput,
 } from "../types/index.ts";
 import { normalizeAssignee } from "../utils/assignee.ts";
-import { documentIdsEqual } from "../utils/document-id.ts";
 import { openInEditor } from "../utils/editor.ts";
 import { buildIdRegex, getPrefixForType, normalizeId } from "../utils/prefix-config.ts";
 import {
@@ -47,6 +46,16 @@ import {
 	needsMigration,
 } from "./config-migration.ts";
 import { ContentStore } from "./content-store.ts";
+import {
+	createDecision,
+	createDecisionWithTitle,
+	createDocument,
+	createDocumentWithId,
+	getDocument,
+	getDocumentContent,
+	updateDecisionFromContent,
+	updateDocument,
+} from "./entity-service.ts";
 import { migrateDraftPrefixes, needsDraftPrefixMigration } from "./prefix-migration.ts";
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { SearchService } from "./search-service.ts";
@@ -311,22 +320,11 @@ export class Core {
 	}
 
 	async getDocument(documentId: string): Promise<Document | null> {
-		const documents = await this.fs.listDocuments();
-		const match = documents.find((doc) => documentIdsEqual(documentId, doc.id));
-		return match ?? null;
+		return getDocument(this, documentId);
 	}
 
 	async getDocumentContent(documentId: string): Promise<string | null> {
-		const document = await this.getDocument(documentId);
-		if (!document) return null;
-
-		const relativePath = document.path ?? `${document.id}.md`;
-		const filePath = join(this.fs.docsDir, relativePath);
-		try {
-			return await Bun.file(filePath).text();
-		} catch {
-			return null;
-		}
+		return getDocumentContent(this, documentId);
 	}
 
 	disposeSearchService(): void {
@@ -1416,107 +1414,27 @@ export class Core {
 	}
 
 	async createDecision(decision: Decision, autoCommit?: boolean): Promise<void> {
-		await this.fs.saveDecision(decision);
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Add decision ${decision.id}`, repoRoot);
-		}
+		return createDecision(this, decision, autoCommit);
 	}
 
 	async updateDecisionFromContent(decisionId: string, content: string, autoCommit?: boolean): Promise<void> {
-		const existingDecision = await this.fs.loadDecision(decisionId);
-		if (!existingDecision) {
-			throw new Error(`Decision ${decisionId} not found`);
-		}
-
-		// Parse the markdown content to extract the decision data
-		const matter = await import("gray-matter");
-		const { data } = matter.default(content);
-
-		const extractSection = (content: string, sectionName: string): string | undefined => {
-			const regex = new RegExp(`## ${sectionName}\\s*([\\s\\S]*?)(?=## |$)`, "i");
-			const match = content.match(regex);
-			return match ? match[1]?.trim() : undefined;
-		};
-
-		const updatedDecision = {
-			...existingDecision,
-			title: data.title || existingDecision.title,
-			status: data.status || existingDecision.status,
-			date: data.date || existingDecision.date,
-			context: extractSection(content, "Context") || existingDecision.context,
-			decision: extractSection(content, "Decision") || existingDecision.decision,
-			consequences: extractSection(content, "Consequences") || existingDecision.consequences,
-			alternatives: extractSection(content, "Alternatives") || existingDecision.alternatives,
-		};
-
-		await this.createDecision(updatedDecision, autoCommit);
+		return updateDecisionFromContent(this, decisionId, content, autoCommit);
 	}
 
 	async createDecisionWithTitle(title: string, autoCommit?: boolean): Promise<Decision> {
-		const { generateNextDecisionId } = await import("../utils/id-generators.js");
-		const id = await generateNextDecisionId(this);
-
-		const decision: Decision = {
-			id,
-			title,
-			date: new Date().toISOString().slice(0, 16).replace("T", " "),
-			status: "proposed",
-			context: "[Describe the context and problem that needs to be addressed]",
-			decision: "[Describe the decision that was made]",
-			consequences: "[Describe the consequences of this decision]",
-			rawContent: "",
-		};
-
-		await this.createDecision(decision, autoCommit);
-		return decision;
+		return createDecisionWithTitle(this, title, autoCommit);
 	}
 
 	async createDocument(doc: Document, autoCommit?: boolean, subPath = ""): Promise<void> {
-		const relativePath = await this.fs.saveDocument(doc, subPath);
-		doc.path = relativePath;
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Add document ${doc.id}`, repoRoot);
-		}
+		return createDocument(this, doc, autoCommit, subPath);
 	}
 
 	async updateDocument(existingDoc: Document, content: string, autoCommit?: boolean): Promise<void> {
-		const updatedDoc = {
-			...existingDoc,
-			rawContent: content,
-			updatedDate: new Date().toISOString().slice(0, 16).replace("T", " "),
-		};
-
-		let normalizedSubPath = "";
-		if (existingDoc.path) {
-			const segments = existingDoc.path.split(/[\\/]/).slice(0, -1);
-			if (segments.length > 0) {
-				normalizedSubPath = segments.join("/");
-			}
-		}
-
-		await this.createDocument(updatedDoc, autoCommit, normalizedSubPath);
+		return updateDocument(this, existingDoc, content, autoCommit);
 	}
 
 	async createDocumentWithId(title: string, content: string, autoCommit?: boolean): Promise<Document> {
-		const { generateNextDocId } = await import("../utils/id-generators.js");
-		const id = await generateNextDocId(this);
-
-		const document: Document = {
-			id,
-			title,
-			type: "other" as const,
-			createdDate: new Date().toISOString().slice(0, 16).replace("T", " "),
-			rawContent: content,
-		};
-
-		await this.createDocument(document, autoCommit);
-		return document;
+		return createDocumentWithId(this, title, content, autoCommit);
 	}
 
 	async initializeProject(projectName: string, autoCommit = false): Promise<void> {
