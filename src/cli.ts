@@ -10,7 +10,6 @@ import { runAdvancedConfigWizard } from "./commands/advanced-config-wizard.ts";
 import { type CompletionInstallResult, installCompletion, registerCompletionCommand } from "./commands/completion.ts";
 import { configureAdvancedSettings } from "./commands/configure-advanced-settings.ts";
 import { registerMcpCommand } from "./commands/mcp.ts";
-import { DEFAULT_DIRECTORIES } from "./constants/index.ts";
 import { initializeProject } from "./core/init.ts";
 import { buildMilestoneBuckets, collectArchivedMilestoneKeys, milestoneKey } from "./core/milestones.ts";
 import { computeSequences } from "./core/sequences.ts";
@@ -50,6 +49,7 @@ import { viewTaskEnhanced } from "./ui/task-viewer-with-search.ts";
 import { promptText, scrollableViewer } from "./ui/tui.ts";
 import { type AgentSelectionValue, PLACEHOLDER_AGENT_VALUE, processAgentSelection } from "./utils/agent-selection.ts";
 import { findBacklogRoot } from "./utils/find-backlog-root.ts";
+import { generateNextDecisionId, generateNextDocId } from "./utils/id-generators.ts";
 import { hasAnyPrefix } from "./utils/prefix-config.ts";
 import { formatValidStatuses, getCanonicalStatus, getValidStatuses } from "./utils/status.ts";
 import {
@@ -1021,142 +1021,6 @@ program
 			}
 		},
 	);
-
-export async function generateNextDocId(core: Core): Promise<string> {
-	const config = await core.filesystem.loadConfig();
-	// Load local documents
-	const docs = await core.filesystem.listDocuments();
-	const allIds: string[] = [];
-
-	try {
-		const backlogDir = DEFAULT_DIRECTORIES.BACKLOG;
-
-		// Skip remote operations if disabled
-		if (config?.remoteOperations === false) {
-			if (process.env.DEBUG) {
-				console.log("Remote operations disabled - generating ID from local documents only");
-			}
-		} else {
-			await core.gitOps.fetch();
-		}
-
-		const branches = await core.gitOps.listAllBranches();
-
-		// Load files from all branches in parallel
-		const branchFilePromises = branches.map(async (branch) => {
-			const files = await core.gitOps.listFilesInTree(branch, `${backlogDir}/docs`);
-			return files
-				.map((file) => {
-					const match = file.match(/doc-(\d+)/);
-					return match ? `doc-${match[1]}` : null;
-				})
-				.filter((id): id is string => id !== null);
-		});
-
-		const branchResults = await Promise.all(branchFilePromises);
-		for (const branchIds of branchResults) {
-			allIds.push(...branchIds);
-		}
-	} catch (error) {
-		// Suppress errors for offline mode or other git issues
-		if (process.env.DEBUG) {
-			console.error("Could not fetch remote document IDs:", error);
-		}
-	}
-
-	// Add local document IDs
-	for (const doc of docs) {
-		allIds.push(doc.id);
-	}
-
-	// Find the highest numeric ID
-	let max = 0;
-	for (const id of allIds) {
-		const match = id.match(/^doc-(\d+)$/);
-		if (match) {
-			const num = Number.parseInt(match[1] || "0", 10);
-			if (num > max) max = num;
-		}
-	}
-
-	const nextIdNumber = max + 1;
-	const padding = config?.zeroPaddedIds;
-
-	if (padding && typeof padding === "number" && padding > 0) {
-		const paddedId = String(nextIdNumber).padStart(padding, "0");
-		return `doc-${paddedId}`;
-	}
-
-	return `doc-${nextIdNumber}`;
-}
-
-export async function generateNextDecisionId(core: Core): Promise<string> {
-	const config = await core.filesystem.loadConfig();
-	// Load local decisions
-	const decisions = await core.filesystem.listDecisions();
-	const allIds: string[] = [];
-
-	try {
-		const backlogDir = DEFAULT_DIRECTORIES.BACKLOG;
-
-		// Skip remote operations if disabled
-		if (config?.remoteOperations === false) {
-			if (process.env.DEBUG) {
-				console.log("Remote operations disabled - generating ID from local decisions only");
-			}
-		} else {
-			await core.gitOps.fetch();
-		}
-
-		const branches = await core.gitOps.listAllBranches();
-
-		// Load files from all branches in parallel
-		const branchFilePromises = branches.map(async (branch) => {
-			const files = await core.gitOps.listFilesInTree(branch, `${backlogDir}/decisions`);
-			return files
-				.map((file) => {
-					const match = file.match(/decision-(\d+)/);
-					return match ? `decision-${match[1]}` : null;
-				})
-				.filter((id): id is string => id !== null);
-		});
-
-		const branchResults = await Promise.all(branchFilePromises);
-		for (const branchIds of branchResults) {
-			allIds.push(...branchIds);
-		}
-	} catch (error) {
-		// Suppress errors for offline mode or other git issues
-		if (process.env.DEBUG) {
-			console.error("Could not fetch remote decision IDs:", error);
-		}
-	}
-
-	// Add local decision IDs
-	for (const decision of decisions) {
-		allIds.push(decision.id);
-	}
-
-	// Find the highest numeric ID
-	let max = 0;
-	for (const id of allIds) {
-		const match = id.match(/^decision-(\d+)$/);
-		if (match) {
-			const num = Number.parseInt(match[1] || "0", 10);
-			if (num > max) max = num;
-		}
-	}
-
-	const nextIdNumber = max + 1;
-	const padding = config?.zeroPaddedIds;
-
-	if (padding && typeof padding === "number" && padding > 0) {
-		const paddedId = String(nextIdNumber).padStart(padding, "0");
-		return `decision-${paddedId}`;
-	}
-
-	return `decision-${nextIdNumber}`;
-}
 
 function normalizeDependencies(dependencies: unknown): string[] {
 	if (!dependencies) return [];

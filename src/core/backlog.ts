@@ -2245,8 +2245,7 @@ export class Core {
 	}
 
 	async createDecisionWithTitle(title: string, autoCommit?: boolean): Promise<Decision> {
-		// Import the generateNextDecisionId function from CLI
-		const { generateNextDecisionId } = await import("../cli.js");
+		const { generateNextDecisionId } = await import("../utils/id-generators.js");
 		const id = await generateNextDecisionId(this);
 
 		const decision: Decision = {
@@ -2294,8 +2293,7 @@ export class Core {
 	}
 
 	async createDocumentWithId(title: string, content: string, autoCommit?: boolean): Promise<Document> {
-		// Import the generateNextDocId function from CLI
-		const { generateNextDocId } = await import("../cli.js");
+		const { generateNextDocId } = await import("../utils/id-generators.js");
 		const id = await generateNextDocId(this);
 
 		const document: Document = {
