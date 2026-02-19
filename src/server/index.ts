@@ -6,6 +6,7 @@ import type { ContentStore } from "../core/content-store.ts";
 import { initializeProject } from "../core/init.ts";
 import type { SearchService } from "../core/search-service.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
+import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
 import type { SearchPriorityFilter, SearchResultType, Task, TaskUpdateInput } from "../types/index.ts";
 import { watchConfig } from "../utils/config-watcher.ts";
 import { getVersion } from "../utils/version.ts";
@@ -90,6 +91,7 @@ export class BacklogServer {
 	private authEnabled = false;
 	private jwtSecret: string = crypto.randomUUID();
 	private googleClientId: string | null = null;
+	private mcpHandler: McpRequestHandler | null = null;
 
 	constructor(projectPath: string) {
 		this.core = new Core(projectPath, { enableWatchers: true });
@@ -325,17 +327,35 @@ export class BacklogServer {
 		const authConfigRepo = process.env.AUTH_CONFIG_REPO ?? null;
 		this.jwtSecret = process.env.JWT_SECRET ?? crypto.randomUUID();
 
-		if (this.googleClientId && authConfigRepo) {
-			this.authEnabled = true;
+		// Start ConfigRepoService when AUTH_CONFIG_REPO is set — needed for
+		// both Google OAuth (web UI) and API key auth (MCP endpoint).
+		if (authConfigRepo) {
 			this.configRepoService = new ConfigRepoService(authConfigRepo);
 			await this.configRepoService.start();
-			console.log("Auth enabled (Google OAuth)");
+		}
+
+		if (this.googleClientId && this.configRepoService) {
+			this.authEnabled = true;
+			console.log("Auth enabled (Google OAuth + MCP API key)");
+		} else if (this.configRepoService) {
+			console.log("MCP API key auth enabled (set GOOGLE_CLIENT_ID for web auth)");
 		} else {
-			console.log("Auth disabled (set GOOGLE_CLIENT_ID and AUTH_CONFIG_REPO to enable)");
+			console.log("Auth disabled (set AUTH_CONFIG_REPO to enable)");
 		}
 
 		try {
 			await this.ensureServicesReady();
+
+			// Mount MCP endpoint — uses API key auth when ConfigRepoService is available
+			const mcpAuthEnabled = !!this.configRepoService;
+			this.mcpHandler = await createMcpRequestHandler({
+				projectRoot: this.core.filesystem.rootDir,
+				authEnabled: mcpAuthEnabled,
+				findUserByApiKey: mcpAuthEnabled
+					? (key: string) => this.configRepoService?.findUserByApiKey(key) ?? null
+					: undefined,
+			});
+
 			const serveOptions = {
 				port: finalPort,
 				development: process.env.NODE_ENV === "development",
@@ -528,6 +548,7 @@ export class BacklogServer {
 
 			const url = `http://localhost:${finalPort}`;
 			console.log(`🚀 Backlog.md browser interface running at ${url}`);
+			console.log(`🔌 MCP endpoint: ${url}/mcp`);
 			console.log(`📊 Project: ${this.projectName}`);
 			const stopKey = process.platform === "darwin" ? "Cmd+C" : "Ctrl+C";
 			console.log(`⏹️  Press ${stopKey} to stop the server`);
@@ -578,6 +599,12 @@ export class BacklogServer {
 		try {
 			this.configWatcher?.stop();
 			this.configWatcher = null;
+		} catch {}
+
+		// Stop MCP handler
+		try {
+			await this.mcpHandler?.stop();
+			this.mcpHandler = null;
 		} catch {}
 
 		// Stop config repo service
@@ -699,6 +726,14 @@ export class BacklogServer {
 				return new Response(null, { status: 101 }); // WebSocket upgrade response
 			}
 			return new Response("WebSocket upgrade failed", { status: 400 });
+		}
+
+		// MCP endpoint — delegates to the stateless MCP request handler
+		if (pathname === "/mcp") {
+			if (!this.mcpHandler) {
+				return new Response("MCP not ready", { status: 503 });
+			}
+			return this.mcpHandler.handleRequest(req);
 		}
 
 		// Workaround as Bun doesn't support images imported from link tags in HTML

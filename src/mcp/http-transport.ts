@@ -31,22 +31,107 @@ import { filterToolsByRole } from "./auth/tool-filter.ts";
 import { createMcpServer } from "./server.ts";
 import type { McpPromptHandler, McpResourceHandler, McpToolHandler } from "./types.ts";
 
-export type McpHttpServerOptions = {
+export type McpRequestHandlerOptions = {
 	projectRoot: string;
-	port: number;
 	authEnabled: boolean;
 	findUserByApiKey?: (apiKey: string) => AuthUser | null;
 	debug?: boolean;
 };
 
 /**
- * Creates an HTTP server that exposes the MCP protocol over Streamable HTTP.
+ * Reusable MCP request handler that can be embedded in any HTTP server.
+ *
+ * Handles authentication, per-request tool filtering by role, and delegates
+ * to a stateless MCP transport. Designed to be called from both the standalone
+ * HTTP server and BacklogServer's fetch handler.
+ */
+export type McpRequestHandler = {
+	handleRequest: (req: Request) => Promise<Response>;
+	stop: () => Promise<void>;
+};
+
+/**
+ * Creates a reusable MCP request handler without starting its own HTTP server.
  *
  * For each authenticated request a fresh Server + transport pair is created,
  * with only the tools allowed for the caller's role registered. Resources and
  * prompts are passed through without filtering.
  *
- * @param options Server configuration including project root, port, and auth settings.
+ * @param options Handler configuration including project root and auth settings.
+ * @returns A handler object with handleRequest and stop methods.
+ */
+export async function createMcpRequestHandler(options: McpRequestHandlerOptions): Promise<McpRequestHandler> {
+	const { projectRoot, authEnabled, findUserByApiKey, debug } = options;
+
+	const mcpServer = await createMcpServer(projectRoot, { debug });
+	const appName = getPackageName();
+	const appVersion = await getVersion();
+
+	async function handleRequest(req: Request): Promise<Response> {
+		// Auth check
+		let userRole: "admin" | "viewer" | undefined;
+		if (authEnabled) {
+			const token = extractBearerToken(req.headers.get("Authorization"));
+			if (!token || !findUserByApiKey) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+			const user = findUserByApiKey(token);
+			if (!user) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+			userRole = user.role;
+		}
+
+		// Get tools filtered by role, plus all resources and prompts
+		const allTools = mcpServer.getTools();
+		const filteredTools = filterToolsByRole(allTools, userRole);
+		const allResources = mcpServer.getResources();
+		const allPrompts = mcpServer.getPrompts();
+
+		// Create a per-request Server with only the permitted tools
+		const perRequestServer = new Server(
+			{ name: appName, version: appVersion },
+			{
+				capabilities: {
+					tools: {},
+					resources: {},
+					prompts: {},
+				},
+			},
+		);
+
+		registerToolHandlers(perRequestServer, filteredTools);
+		registerResourceHandlers(perRequestServer, allResources);
+		registerPromptHandlers(perRequestServer, allPrompts);
+
+		// Create stateless transport and handle the request
+		const transport = new WebStandardStreamableHTTPServerTransport({
+			sessionIdGenerator: undefined,
+		});
+
+		await perRequestServer.connect(transport);
+		return transport.handleRequest(req);
+	}
+
+	return {
+		handleRequest,
+		stop: async () => {
+			await mcpServer.stop();
+		},
+	};
+}
+
+export type McpHttpServerOptions = McpRequestHandlerOptions & {
+	port: number;
+};
+
+/**
+ * Creates a standalone HTTP server that exposes the MCP protocol.
+ *
+ * Wraps createMcpRequestHandler with its own Bun.serve() instance.
+ * Used by `backlog mcp start --http` for standalone MCP hosting.
+ *
+ * @param options Server configuration including port, project root, and auth settings.
  * @returns An object with the server URL, port, and a stop function.
  */
 export async function createMcpHttpServer(options: McpHttpServerOptions): Promise<{
@@ -54,71 +139,24 @@ export async function createMcpHttpServer(options: McpHttpServerOptions): Promis
 	port: number;
 	stop: () => Promise<void>;
 }> {
-	const { projectRoot, port, authEnabled, findUserByApiKey, debug } = options;
-
-	const mcpServer = await createMcpServer(projectRoot, { debug });
-	const appName = getPackageName();
-	const appVersion = await getVersion();
+	const { port, ...handlerOptions } = options;
+	const handler = await createMcpRequestHandler(handlerOptions);
 
 	const bunServer = Bun.serve({
 		port,
 		async fetch(req: Request): Promise<Response> {
 			const url = new URL(req.url);
-
 			if (url.pathname !== "/mcp") {
 				return new Response("Not Found", { status: 404 });
 			}
-
-			// Auth check
-			let userRole: "admin" | "viewer" | undefined;
-			if (authEnabled) {
-				const token = extractBearerToken(req.headers.get("Authorization"));
-				if (!token || !findUserByApiKey) {
-					return Response.json({ error: "Unauthorized" }, { status: 401 });
-				}
-				const user = findUserByApiKey(token);
-				if (!user) {
-					return Response.json({ error: "Unauthorized" }, { status: 401 });
-				}
-				userRole = user.role;
-			}
-
-			// Get tools filtered by role, plus all resources and prompts
-			const allTools = mcpServer.getTools();
-			const filteredTools = filterToolsByRole(allTools, userRole);
-			const allResources = mcpServer.getResources();
-			const allPrompts = mcpServer.getPrompts();
-
-			// Create a per-request Server with only the permitted tools
-			const perRequestServer = new Server(
-				{ name: appName, version: appVersion },
-				{
-					capabilities: {
-						tools: {},
-						resources: {},
-						prompts: {},
-					},
-				},
-			);
-
-			registerToolHandlers(perRequestServer, filteredTools);
-			registerResourceHandlers(perRequestServer, allResources);
-			registerPromptHandlers(perRequestServer, allPrompts);
-
-			// Create stateless transport and handle the request
-			const transport = new WebStandardStreamableHTTPServerTransport({
-				sessionIdGenerator: undefined,
-			});
-
-			await perRequestServer.connect(transport);
-			return transport.handleRequest(req);
+			return handler.handleRequest(req);
 		},
 	});
 
 	// Bun always assigns a port (random when 0), but the type is number | undefined
 	const assignedPort = bunServer.port ?? port;
 	const url = `http://localhost:${assignedPort}`;
-	if (debug) {
+	if (handlerOptions.debug) {
 		console.error(`MCP HTTP server listening on ${url}/mcp`);
 	}
 
@@ -127,7 +165,7 @@ export async function createMcpHttpServer(options: McpHttpServerOptions): Promis
 		port: assignedPort,
 		stop: async () => {
 			bunServer.stop(true);
-			await mcpServer.stop();
+			await handler.stop();
 		},
 	};
 }
