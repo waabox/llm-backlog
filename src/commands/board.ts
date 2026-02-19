@@ -3,9 +3,9 @@ import { stdin as input } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { Command } from "commander";
 import { Core } from "../core/backlog.ts";
-import { collectArchivedMilestoneKeys, milestoneKey } from "../core/milestones.ts";
+import { collectArchivedMilestoneKeys, milestoneKey, resolveMilestoneInput } from "../core/milestones.ts";
 import { exportKanbanBoardToFile, updateReadmeWithBoard } from "../index.ts";
-import type { Milestone, Task } from "../types/index.ts";
+import type { Task } from "../types/index.ts";
 import { createLoadingScreen } from "../ui/loading.ts";
 import { getVersion } from "../utils/version.ts";
 import { requireProjectRoot } from "./shared.ts";
@@ -47,93 +47,13 @@ async function handleBoardView(options: { layout?: string; vertical?: boolean; m
 				core.filesystem.listMilestones(),
 				core.filesystem.listArchivedMilestones(),
 			]);
-			const resolveMilestoneAlias = (value?: string): string => {
-				const normalized = (value ?? "").trim();
-				if (!normalized) {
-					return "";
-				}
-				const key = normalized.toLowerCase();
-				const looksLikeMilestoneId = /^\d+$/.test(normalized) || /^m-\d+$/i.test(normalized);
-				const canonicalInputId = looksLikeMilestoneId
-					? `m-${String(Number.parseInt(normalized.replace(/^m-/i, ""), 10))}`
-					: null;
-				const aliasKeys = new Set<string>([key]);
-				if (/^\d+$/.test(normalized)) {
-					const numericAlias = String(Number.parseInt(normalized, 10));
-					aliasKeys.add(numericAlias);
-					aliasKeys.add(`m-${numericAlias}`);
-				} else {
-					const idMatch = normalized.match(/^m-(\d+)$/i);
-					if (idMatch?.[1]) {
-						const numericAlias = String(Number.parseInt(idMatch[1], 10));
-						aliasKeys.add(numericAlias);
-						aliasKeys.add(`m-${numericAlias}`);
-					}
-				}
-				const idMatchesAlias = (milestoneId: string): boolean => {
-					const idKey = milestoneId.trim().toLowerCase();
-					if (aliasKeys.has(idKey)) {
-						return true;
-					}
-					const idMatch = milestoneId.trim().match(/^m-(\d+)$/i);
-					if (!idMatch?.[1]) {
-						return false;
-					}
-					const numericAlias = String(Number.parseInt(idMatch[1], 10));
-					return aliasKeys.has(numericAlias) || aliasKeys.has(`m-${numericAlias}`);
-				};
-				const findIdMatch = (milestones: Milestone[]): Milestone | undefined => {
-					const rawExactMatch = milestones.find((milestone) => milestone.id.trim().toLowerCase() === key);
-					if (rawExactMatch) {
-						return rawExactMatch;
-					}
-					if (canonicalInputId) {
-						const canonicalRawMatch = milestones.find(
-							(milestone) => milestone.id.trim().toLowerCase() === canonicalInputId,
-						);
-						if (canonicalRawMatch) {
-							return canonicalRawMatch;
-						}
-					}
-					return milestones.find((milestone) => idMatchesAlias(milestone.id));
-				};
-
-				const activeIdMatch = findIdMatch(milestoneEntities);
-				if (activeIdMatch) {
-					return activeIdMatch.id;
-				}
-				if (looksLikeMilestoneId) {
-					const archivedIdMatch = findIdMatch(archivedMilestones);
-					if (archivedIdMatch) {
-						return archivedIdMatch.id;
-					}
-				}
-				const activeTitleMatches = milestoneEntities.filter(
-					(milestone) => milestone.title.trim().toLowerCase() === key,
-				);
-				if (activeTitleMatches.length === 1) {
-					return activeTitleMatches[0]?.id ?? normalized;
-				}
-				if (activeTitleMatches.length > 1) {
-					return normalized;
-				}
-				const archivedIdMatch = findIdMatch(archivedMilestones);
-				if (archivedIdMatch) {
-					return archivedIdMatch.id;
-				}
-				const archivedTitleMatches = archivedMilestones.filter(
-					(milestone) => milestone.title.trim().toLowerCase() === key,
-				);
-				if (archivedTitleMatches.length === 1) {
-					return archivedTitleMatches[0]?.id ?? normalized;
-				}
-				return normalized;
-			};
 			const archivedKeys = new Set(collectArchivedMilestoneKeys(archivedMilestones, milestoneEntities));
 			const normalizedTasks =
 				archivedKeys.size > 0
 					? tasks.map((task) => {
-							const key = milestoneKey(resolveMilestoneAlias(task.milestone));
+							const key = milestoneKey(
+								resolveMilestoneInput(task.milestone ?? "", milestoneEntities, archivedMilestones),
+							);
 							if (!key || !archivedKeys.has(key)) {
 								return task;
 							}
