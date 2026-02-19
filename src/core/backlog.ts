@@ -1,4 +1,4 @@
-import { rename as moveFile, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULT_DIRECTORIES, DEFAULT_STATUSES, FALLBACK_STATUS } from "../constants/index.ts";
 import { FileSystem } from "../file-system/operations.ts";
@@ -29,13 +29,23 @@ import {
 	normalizeStringList,
 	validateDependencies,
 } from "../utils/task-builders.ts";
-import { getTaskFilename, getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
+import { getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
 import {
 	addAcceptanceCriteria,
 	checkAcceptanceCriteria,
 	listAcceptanceCriteria,
 	removeAcceptanceCriteria,
 } from "./acceptance-criteria.ts";
+import {
+	archiveDraft,
+	archiveMilestone,
+	archiveTask,
+	completeTask,
+	demoteTask,
+	getDoneTasksByAge,
+	promoteDraft,
+	renameMilestone,
+} from "./archive-service.ts";
 import {
 	extractLegacyConfigMilestones,
 	migrateConfig,
@@ -58,7 +68,7 @@ import { migrateDraftPrefixes, needsDraftPrefixMigration } from "./prefix-migrat
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { SearchService } from "./search-service.ts";
 import { computeSequences, planMoveToSequence, planMoveToUnsequenced } from "./sequences.ts";
-import { applyTaskUpdateInput, normalizePriority, sanitizeArchivedTaskLinks } from "./task-mutation.ts";
+import { applyTaskUpdateInput, normalizePriority } from "./task-mutation.ts";
 import {
 	getTask,
 	getTaskContent,
@@ -895,75 +905,14 @@ export class Core {
 	}
 
 	async archiveTask(taskId: string, autoCommit?: boolean): Promise<boolean> {
-		const taskToArchive = await this.fs.loadTask(taskId);
-		if (!taskToArchive) {
-			return false;
-		}
-		const normalizedTaskId = taskToArchive.id;
-
-		// Get paths before moving the file
-		const taskPath = taskToArchive.filePath ?? (await getTaskPath(normalizedTaskId, this));
-		const taskFilename = await getTaskFilename(normalizedTaskId, this);
-
-		if (!taskPath || !taskFilename) return false;
-
-		const fromPath = taskPath;
-		const toPath = join(await this.fs.getArchiveTasksDir(), taskFilename);
-
-		const success = await this.fs.archiveTask(normalizedTaskId);
-		if (!success) {
-			return false;
-		}
-
-		const activeTasks = await this.fs.listTasks();
-		const sanitizedTasks = sanitizeArchivedTaskLinks(activeTasks, normalizedTaskId);
-		if (sanitizedTasks.length > 0) {
-			await this.updateTasksBulk(sanitizedTasks, undefined, false);
-		}
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			// Stage the file move for proper Git tracking
-			const repoRoot = await this.git.stageFileMove(fromPath, toPath);
-			for (const sanitizedTask of sanitizedTasks) {
-				if (sanitizedTask.filePath) {
-					await this.git.addFile(sanitizedTask.filePath);
-				}
-			}
-			await this.git.commitChanges(`backlog: Archive task ${normalizedTaskId}`, repoRoot);
-		}
-
-		return true;
+		return archiveTask(this, taskId, autoCommit);
 	}
 
 	async archiveMilestone(
 		identifier: string,
 		autoCommit?: boolean,
 	): Promise<{ success: boolean; sourcePath?: string; targetPath?: string; milestone?: Milestone }> {
-		const result = await this.fs.archiveMilestone(identifier);
-
-		if (result.success && result.sourcePath && result.targetPath && (await this.shouldAutoCommit(autoCommit))) {
-			const repoRoot = await this.git.stageFileMove(result.sourcePath, result.targetPath);
-			const label = result.milestone?.id ? ` ${result.milestone.id}` : "";
-			const commitPaths = [result.sourcePath, result.targetPath];
-			try {
-				await this.git.commitFiles(`backlog: Archive milestone${label}`, commitPaths, repoRoot);
-			} catch (error) {
-				await this.git.resetPaths(commitPaths, repoRoot);
-				try {
-					await moveFile(result.targetPath, result.sourcePath);
-				} catch {
-					// Ignore rollback failure and propagate original commit error.
-				}
-				throw error;
-			}
-		}
-
-		return {
-			success: result.success,
-			sourcePath: result.sourcePath,
-			targetPath: result.targetPath,
-			milestone: result.milestone,
-		};
+		return archiveMilestone(this, identifier, autoCommit);
 	}
 
 	async renameMilestone(
@@ -977,101 +926,27 @@ export class Core {
 		milestone?: Milestone;
 		previousTitle?: string;
 	}> {
-		const result = await this.fs.renameMilestone(identifier, title);
-		if (!result.success) {
-			return result;
-		}
-
-		if (result.sourcePath && result.targetPath && (await this.shouldAutoCommit(autoCommit))) {
-			const repoRoot = await this.git.stageFileMove(result.sourcePath, result.targetPath);
-			const label = result.milestone?.id ? ` ${result.milestone.id}` : "";
-			const commitPaths = [result.sourcePath, result.targetPath];
-			try {
-				await this.git.commitFiles(`backlog: Rename milestone${label}`, commitPaths, repoRoot);
-			} catch (error) {
-				await this.git.resetPaths(commitPaths, repoRoot);
-				const rollbackTitle = result.previousTitle ?? title;
-				await this.fs.renameMilestone(result.milestone?.id ?? identifier, rollbackTitle);
-				throw error;
-			}
-		}
-
-		return result;
+		return renameMilestone(this, identifier, title, autoCommit);
 	}
 
 	async completeTask(taskId: string, autoCommit?: boolean): Promise<boolean> {
-		// Get paths before moving the file
-		const completedDir = this.fs.completedDir;
-		const taskPath = await getTaskPath(taskId, this);
-		const taskFilename = await getTaskFilename(taskId, this);
-
-		if (!taskPath || !taskFilename) return false;
-
-		const fromPath = taskPath;
-		const toPath = join(completedDir, taskFilename);
-
-		const success = await this.fs.completeTask(taskId);
-
-		if (success && (await this.shouldAutoCommit(autoCommit))) {
-			// Stage the file move for proper Git tracking
-			const repoRoot = await this.git.stageFileMove(fromPath, toPath);
-			await this.git.commitChanges(`backlog: Complete task ${normalizeTaskId(taskId)}`, repoRoot);
-		}
-
-		return success;
+		return completeTask(this, taskId, autoCommit);
 	}
 
 	async getDoneTasksByAge(olderThanDays: number): Promise<Task[]> {
-		const tasks = await this.fs.listTasks();
-		const cutoffDate = new Date();
-		cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-
-		return tasks.filter((task) => {
-			if (task.status !== "Done") return false;
-
-			// Check updatedDate first, then createdDate as fallback
-			const taskDate = task.updatedDate || task.createdDate;
-			if (!taskDate) return false;
-
-			const date = new Date(taskDate);
-			return date < cutoffDate;
-		});
+		return getDoneTasksByAge(this, olderThanDays);
 	}
 
 	async archiveDraft(draftId: string, autoCommit?: boolean): Promise<boolean> {
-		const success = await this.fs.archiveDraft(draftId);
-
-		if (success && (await this.shouldAutoCommit(autoCommit))) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Archive draft ${normalizeId(draftId, "draft")}`, repoRoot);
-		}
-
-		return success;
+		return archiveDraft(this, draftId, autoCommit);
 	}
 
 	async promoteDraft(draftId: string, autoCommit?: boolean): Promise<boolean> {
-		const success = await this.fs.promoteDraft(draftId);
-
-		if (success && (await this.shouldAutoCommit(autoCommit))) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Promote draft ${normalizeId(draftId, "draft")}`, repoRoot);
-		}
-
-		return success;
+		return promoteDraft(this, draftId, autoCommit);
 	}
 
 	async demoteTask(taskId: string, autoCommit?: boolean): Promise<boolean> {
-		const success = await this.fs.demoteTask(taskId);
-
-		if (success && (await this.shouldAutoCommit(autoCommit))) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Demote task ${normalizeTaskId(taskId)}`, repoRoot);
-		}
-
-		return success;
+		return demoteTask(this, taskId, autoCommit);
 	}
 
 	/**
