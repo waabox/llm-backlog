@@ -1,6 +1,5 @@
-import { unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { DEFAULT_DIRECTORIES, DEFAULT_STATUSES, FALLBACK_STATUS } from "../constants/index.ts";
+import { DEFAULT_DIRECTORIES, DEFAULT_STATUSES } from "../constants/index.ts";
 import { FileSystem } from "../file-system/operations.ts";
 import { GitOperations } from "../git/operations.ts";
 import {
@@ -15,21 +14,11 @@ import {
 	type TaskCreateInput,
 	type TaskUpdateInput,
 } from "../types/index.ts";
-import { normalizeAssignee } from "../utils/assignee.ts";
 import { openInEditor } from "../utils/editor.ts";
-import { normalizeId } from "../utils/prefix-config.ts";
 import {
 	getCanonicalStatus as resolveCanonicalStatus,
 	getValidStatuses as resolveValidStatuses,
 } from "../utils/status.ts";
-import { executeStatusCallback } from "../utils/status-callback.ts";
-import {
-	buildDefinitionOfDoneItems,
-	normalizeDependencies,
-	normalizeStringList,
-	validateDependencies,
-} from "../utils/task-builders.ts";
-import { getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
 import {
 	addAcceptanceCriteria,
 	checkAcceptanceCriteria,
@@ -65,10 +54,23 @@ import {
 } from "./entity-service.ts";
 import { generateNextId } from "./id-generation.ts";
 import { migrateDraftPrefixes, needsDraftPrefixMigration } from "./prefix-migration.ts";
-import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { SearchService } from "./search-service.ts";
-import { computeSequences, planMoveToSequence, planMoveToUnsequenced } from "./sequences.ts";
-import { applyTaskUpdateInput, normalizePriority } from "./task-mutation.ts";
+import {
+	createDraft,
+	createTask,
+	createTaskFromData,
+	createTaskFromInput,
+	editTask,
+	editTaskOrDraft,
+	listActiveSequences,
+	moveTaskInSequences,
+	reorderTask,
+	updateDraft,
+	updateDraftFromInput,
+	updateTask,
+	updateTaskFromInput,
+	updateTasksBulk,
+} from "./task-lifecycle.ts";
 import {
 	getTask,
 	getTaskContent,
@@ -107,7 +109,7 @@ interface BlessedScreen {
 export class Core {
 	public fs: FileSystem;
 	public git: GitOperations;
-	private contentStore?: ContentStore;
+	contentStore?: ContentStore;
 	private searchService?: SearchService;
 	private readonly enableWatchers: boolean;
 
@@ -138,7 +140,7 @@ export class Core {
 		return this.searchService;
 	}
 
-	private async requireCanonicalStatus(status: string): Promise<string> {
+	async requireCanonicalStatus(status: string): Promise<string> {
 		const canonical = await resolveCanonicalStatus(status, this);
 		if (canonical) {
 			return canonical;
@@ -292,451 +294,47 @@ export class Core {
 		},
 		autoCommit?: boolean,
 	): Promise<Task> {
-		// Determine entity type before generating ID - drafts get DRAFT-X, tasks get TASK-X
-		const isDraft = taskData.status?.toLowerCase() === "draft";
-		const entityType = isDraft ? EntityType.Draft : EntityType.Task;
-		const id = await this.generateNextId(entityType, isDraft ? undefined : taskData.parentTaskId);
-
-		const task: Task = {
-			id,
-			title: taskData.title,
-			status: taskData.status || "",
-			assignee: taskData.assignee || [],
-			labels: taskData.labels || [],
-			dependencies: taskData.dependencies || [],
-			rawContent: "",
-			createdDate: new Date().toISOString().slice(0, 16).replace("T", " "),
-			...(taskData.parentTaskId && { parentTaskId: taskData.parentTaskId }),
-			...(taskData.priority && { priority: taskData.priority }),
-			...(typeof taskData.milestone === "string" &&
-				taskData.milestone.trim().length > 0 && {
-					milestone: taskData.milestone.trim(),
-				}),
-			...(typeof taskData.description === "string" && { description: taskData.description }),
-			...(Array.isArray(taskData.acceptanceCriteriaItems) &&
-				taskData.acceptanceCriteriaItems.length > 0 && {
-					acceptanceCriteriaItems: taskData.acceptanceCriteriaItems,
-				}),
-			...(typeof taskData.implementationPlan === "string" && { implementationPlan: taskData.implementationPlan }),
-			...(typeof taskData.implementationNotes === "string" && { implementationNotes: taskData.implementationNotes }),
-			...(typeof taskData.finalSummary === "string" && { finalSummary: taskData.finalSummary }),
-		};
-
-		// Save as draft or task based on status
-		if (isDraft) {
-			await this.createDraft(task, autoCommit);
-		} else {
-			await this.createTask(task, autoCommit);
-		}
-
-		return task;
+		return createTaskFromData(this, taskData, autoCommit);
 	}
 
 	async createTaskFromInput(input: TaskCreateInput, autoCommit?: boolean): Promise<{ task: Task; filePath?: string }> {
-		if (!input.title || input.title.trim().length === 0) {
-			throw new Error("Title is required to create a task.");
-		}
-
-		// Determine if this is a draft BEFORE generating the ID
-		const requestedStatus = input.status?.trim();
-		const isDraft = requestedStatus?.toLowerCase() === "draft";
-
-		// Generate ID with appropriate entity type - drafts get DRAFT-X, tasks get TASK-X
-		const entityType = isDraft ? EntityType.Draft : EntityType.Task;
-		const id = await this.generateNextId(entityType, isDraft ? undefined : input.parentTaskId);
-
-		const normalizedLabels = normalizeStringList(input.labels) ?? [];
-		const normalizedAssignees = normalizeStringList(input.assignee) ?? [];
-		const normalizedDependencies = normalizeDependencies(input.dependencies);
-		const normalizedReferences = normalizeStringList(input.references) ?? [];
-		const normalizedDocumentation = normalizeStringList(input.documentation) ?? [];
-
-		const { valid: validDependencies, invalid: invalidDependencies } = await validateDependencies(
-			normalizedDependencies,
-			this,
-		);
-		if (invalidDependencies.length > 0) {
-			throw new Error(
-				`The following dependencies do not exist: ${invalidDependencies.join(", ")}. Please create these tasks first or verify the IDs.`,
-			);
-		}
-
-		let status = "";
-		if (requestedStatus) {
-			if (isDraft) {
-				status = "Draft";
-			} else {
-				status = await this.requireCanonicalStatus(requestedStatus);
-			}
-		}
-
-		const priority = normalizePriority(input.priority);
-		const createdDate = new Date().toISOString().slice(0, 16).replace("T", " ");
-
-		const acceptanceCriteriaItems = Array.isArray(input.acceptanceCriteria)
-			? input.acceptanceCriteria
-					.map((criterion, index) => ({
-						index: index + 1,
-						text: String(criterion.text ?? "").trim(),
-						checked: Boolean(criterion.checked),
-					}))
-					.filter((criterion) => criterion.text.length > 0)
-			: [];
-		const config = await this.fs.loadConfig();
-		const definitionOfDoneItems = buildDefinitionOfDoneItems({
-			defaults: config?.definitionOfDone,
-			add: input.definitionOfDoneAdd,
-			disableDefaults: input.disableDefinitionOfDoneDefaults,
-		});
-
-		const task: Task = {
-			id,
-			title: input.title.trim(),
-			status,
-			assignee: normalizedAssignees,
-			labels: normalizedLabels,
-			dependencies: validDependencies,
-			references: normalizedReferences,
-			documentation: normalizedDocumentation,
-			rawContent: input.rawContent ?? "",
-			createdDate,
-			...(input.parentTaskId && { parentTaskId: input.parentTaskId }),
-			...(priority && { priority }),
-			...(typeof input.milestone === "string" &&
-				input.milestone.trim().length > 0 && {
-					milestone: input.milestone.trim(),
-				}),
-			...(typeof input.description === "string" && { description: input.description }),
-			...(typeof input.implementationPlan === "string" && { implementationPlan: input.implementationPlan }),
-			...(typeof input.implementationNotes === "string" && { implementationNotes: input.implementationNotes }),
-			...(typeof input.finalSummary === "string" && { finalSummary: input.finalSummary }),
-			...(acceptanceCriteriaItems.length > 0 && { acceptanceCriteriaItems }),
-			...(definitionOfDoneItems && definitionOfDoneItems.length > 0 && { definitionOfDoneItems }),
-		};
-
-		const filePath = isDraft ? await this.createDraft(task, autoCommit) : await this.createTask(task, autoCommit);
-
-		// Load the saved task/draft to return updated data
-		const savedTask = isDraft ? await this.fs.loadDraft(id) : await this.fs.loadTask(id);
-		return { task: savedTask ?? task, filePath };
+		return createTaskFromInput(this, input, autoCommit);
 	}
 
 	async createTask(task: Task, autoCommit?: boolean): Promise<string> {
-		if (!task.status) {
-			const config = await this.fs.loadConfig();
-			task.status = config?.defaultStatus || FALLBACK_STATUS;
-		}
-
-		normalizeAssignee(task);
-
-		const filepath = await this.fs.saveTask(task);
-		// Keep any in-process ContentStore in sync for immediate UI/search freshness.
-		if (this.contentStore) {
-			const savedTask = await this.fs.loadTask(task.id);
-			if (savedTask) {
-				this.contentStore.upsertTask(savedTask);
-			}
-		}
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			await this.git.addAndCommitTaskFile(task.id, filepath, "create");
-		}
-
-		return filepath;
+		return createTask(this, task, autoCommit);
 	}
 
 	async createDraft(task: Task, autoCommit?: boolean): Promise<string> {
-		// Drafts always have status "Draft", regardless of config default
-		task.status = "Draft";
-		normalizeAssignee(task);
-
-		const filepath = await this.fs.saveDraft(task);
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			await this.git.addFile(filepath);
-			await this.git.commitTaskChange(task.id, `Create draft ${task.id}`, filepath);
-		}
-
-		return filepath;
+		return createDraft(this, task, autoCommit);
 	}
 
 	async updateTask(task: Task, autoCommit?: boolean): Promise<void> {
-		normalizeAssignee(task);
-
-		// Load original task to detect status changes for callbacks
-		const originalTask = await this.fs.loadTask(task.id);
-		const oldStatus = originalTask?.status ?? "";
-		const newStatus = task.status ?? "";
-		const statusChanged = oldStatus !== newStatus;
-
-		// Always set updatedDate when updating a task
-		task.updatedDate = new Date().toISOString().slice(0, 16).replace("T", " ");
-
-		await this.fs.saveTask(task);
-		// Keep any in-process ContentStore in sync for immediate UI/search freshness.
-		if (this.contentStore) {
-			const savedTask = await this.fs.loadTask(task.id);
-			if (savedTask) {
-				this.contentStore.upsertTask(savedTask);
-			}
-		}
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const filePath = await getTaskPath(task.id, this);
-			if (filePath) {
-				await this.git.addAndCommitTaskFile(task.id, filePath, "update");
-			}
-		}
-
-		// Fire status change callback if status changed
-		if (statusChanged) {
-			await this.executeStatusChangeCallback(task, oldStatus, newStatus);
-		}
+		return updateTask(this, task, autoCommit);
 	}
 
 	async updateTaskFromInput(taskId: string, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		const task = await this.fs.loadTask(taskId);
-		if (!task) {
-			throw new Error(`Task not found: ${taskId}`);
-		}
-
-		const requestedStatus = input.status?.trim().toLowerCase();
-		if (requestedStatus === "draft") {
-			return await this.demoteTaskWithUpdates(task, input, autoCommit);
-		}
-
-		const { mutated } = await applyTaskUpdateInput(
-			task,
-			input,
-			async (status) => this.requireCanonicalStatus(status),
-			this,
-		);
-
-		if (!mutated) {
-			return task;
-		}
-
-		await this.updateTask(task, autoCommit);
-		const refreshed = await this.fs.loadTask(taskId);
-		return refreshed ?? task;
+		return updateTaskFromInput(this, taskId, input, autoCommit);
 	}
 
 	async updateDraft(task: Task, autoCommit?: boolean): Promise<void> {
-		// Drafts always keep status Draft
-		task.status = "Draft";
-		normalizeAssignee(task);
-		task.updatedDate = new Date().toISOString().slice(0, 16).replace("T", " ");
-
-		const filepath = await this.fs.saveDraft(task);
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			await this.git.addFile(filepath);
-			await this.git.commitTaskChange(task.id, `Update draft ${task.id}`, filepath);
-		}
+		return updateDraft(this, task, autoCommit);
 	}
 
 	async updateDraftFromInput(draftId: string, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		const draft = await this.fs.loadDraft(draftId);
-		if (!draft) {
-			throw new Error(`Draft not found: ${draftId}`);
-		}
-
-		const { mutated } = await applyTaskUpdateInput(
-			draft,
-			input,
-			async (status) => {
-				if (status.trim().toLowerCase() !== "draft") {
-					throw new Error("Drafts must use status Draft.");
-				}
-				return "Draft";
-			},
-			this,
-		);
-
-		if (!mutated) {
-			return draft;
-		}
-
-		await this.updateDraft(draft, autoCommit);
-		const refreshed = await this.fs.loadDraft(draftId);
-		return refreshed ?? draft;
+		return updateDraftFromInput(this, draftId, input, autoCommit);
 	}
 
 	async editTaskOrDraft(taskId: string, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		const draft = await this.fs.loadDraft(taskId);
-		if (draft) {
-			const requestedStatus = input.status?.trim();
-			const wantsDraft = requestedStatus?.toLowerCase() === "draft";
-			if (requestedStatus && !wantsDraft) {
-				return await this.promoteDraftWithUpdates(draft, input, autoCommit);
-			}
-			return await this.updateDraftFromInput(draft.id, input, autoCommit);
-		}
-
-		const task = await this.fs.loadTask(taskId);
-		if (!task) {
-			throw new Error(`Task not found: ${taskId}`);
-		}
-
-		const requestedStatus = input.status?.trim();
-		const wantsDraft = requestedStatus?.toLowerCase() === "draft";
-		if (wantsDraft) {
-			return await this.demoteTaskWithUpdates(task, input, autoCommit);
-		}
-
-		return await this.updateTaskFromInput(task.id, input, autoCommit);
-	}
-
-	private async promoteDraftWithUpdates(draft: Task, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		const targetStatus = input.status?.trim();
-		if (!targetStatus || targetStatus.toLowerCase() === "draft") {
-			throw new Error("Promoting a draft requires a non-draft status.");
-		}
-
-		const { mutated } = await applyTaskUpdateInput(
-			draft,
-			{ ...input, status: undefined },
-			async (status) => {
-				if (status.trim().toLowerCase() !== "draft") {
-					throw new Error("Drafts must use status Draft.");
-				}
-				return "Draft";
-			},
-			this,
-		);
-
-		const canonicalStatus = await this.requireCanonicalStatus(targetStatus);
-		const newTaskId = await this.generateNextId(EntityType.Task, draft.parentTaskId);
-		const draftPath = draft.filePath;
-
-		const promotedTask: Task = {
-			...draft,
-			id: newTaskId,
-			status: canonicalStatus,
-			filePath: undefined,
-			...(mutated || draft.status !== canonicalStatus
-				? { updatedDate: new Date().toISOString().slice(0, 16).replace("T", " ") }
-				: {}),
-		};
-
-		normalizeAssignee(promotedTask);
-		const savedPath = await this.fs.saveTask(promotedTask);
-
-		if (draftPath) {
-			await unlink(draftPath);
-		}
-
-		if (this.contentStore) {
-			const savedTask = await this.fs.loadTask(promotedTask.id);
-			if (savedTask) {
-				this.contentStore.upsertTask(savedTask);
-			}
-		}
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Promote draft ${normalizeId(draft.id, "draft")}`, repoRoot);
-		}
-
-		return (await this.fs.loadTask(promotedTask.id)) ?? { ...promotedTask, filePath: savedPath };
-	}
-
-	private async demoteTaskWithUpdates(task: Task, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		const { mutated } = await applyTaskUpdateInput(
-			task,
-			{ ...input, status: undefined },
-			async (status) => {
-				if (status.trim().toLowerCase() === "draft") {
-					return "Draft";
-				}
-				return this.requireCanonicalStatus(status);
-			},
-			this,
-		);
-
-		const newDraftId = await this.generateNextId(EntityType.Draft);
-		const taskPath = task.filePath;
-
-		const demotedDraft: Task = {
-			...task,
-			id: newDraftId,
-			status: "Draft",
-			filePath: undefined,
-			...(mutated || task.status !== "Draft"
-				? { updatedDate: new Date().toISOString().slice(0, 16).replace("T", " ") }
-				: {}),
-		};
-
-		normalizeAssignee(demotedDraft);
-		const savedPath = await this.fs.saveDraft(demotedDraft);
-
-		if (taskPath) {
-			await unlink(taskPath);
-		}
-
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(`backlog: Demote task ${normalizeTaskId(task.id)}`, repoRoot);
-		}
-
-		return (await this.fs.loadDraft(demotedDraft.id)) ?? { ...demotedDraft, filePath: savedPath };
-	}
-
-	/**
-	 * Execute the onStatusChange callback if configured.
-	 * Per-task callback takes precedence over global config.
-	 * Failures are logged but don't block the status change.
-	 */
-	private async executeStatusChangeCallback(task: Task, oldStatus: string, newStatus: string): Promise<void> {
-		const config = await this.fs.loadConfig();
-
-		// Per-task callback takes precedence over global config
-		const callbackCommand = task.onStatusChange ?? config?.onStatusChange;
-		if (!callbackCommand) {
-			return;
-		}
-
-		try {
-			const result = await executeStatusCallback({
-				command: callbackCommand,
-				taskId: task.id,
-				oldStatus,
-				newStatus,
-				taskTitle: task.title,
-				cwd: this.fs.rootDir,
-			});
-
-			if (!result.success) {
-				console.error(`Status change callback failed for ${task.id}: ${result.error ?? "Unknown error"}`);
-				if (result.output) {
-					console.error(`Callback output: ${result.output}`);
-				}
-			} else if (process.env.DEBUG && result.output) {
-				console.log(`Status change callback output for ${task.id}: ${result.output}`);
-			}
-		} catch (error) {
-			console.error(`Failed to execute status change callback for ${task.id}:`, error);
-		}
+		return editTaskOrDraft(this, taskId, input, autoCommit);
 	}
 
 	async editTask(taskId: string, input: TaskUpdateInput, autoCommit?: boolean): Promise<Task> {
-		return await this.updateTaskFromInput(taskId, input, autoCommit);
+		return editTask(this, taskId, input, autoCommit);
 	}
 
 	async updateTasksBulk(tasks: Task[], commitMessage?: string, autoCommit?: boolean): Promise<void> {
-		// Update all tasks without committing individually
-		for (const task of tasks) {
-			await this.updateTask(task, false); // Don't auto-commit each one
-		}
-
-		// Commit all changes at once if auto-commit is enabled
-		if (await this.shouldAutoCommit(autoCommit)) {
-			const backlogDir = await this.getBacklogDirectoryName();
-			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
-			await this.git.commitChanges(commitMessage || `Update ${tasks.length} tasks`, repoRoot);
-		}
+		return updateTasksBulk(this, tasks, commitMessage, autoCommit);
 	}
 
 	async reorderTask(params: {
@@ -748,125 +346,12 @@ export class Core {
 		autoCommit?: boolean;
 		defaultStep?: number;
 	}): Promise<{ updatedTask: Task; changedTasks: Task[] }> {
-		const taskId = normalizeTaskId(String(params.taskId || "").trim());
-		const targetStatus = String(params.targetStatus || "").trim();
-		const orderedTaskIds = params.orderedTaskIds.map((id) => normalizeTaskId(String(id || "").trim())).filter(Boolean);
-		const defaultStep = params.defaultStep ?? DEFAULT_ORDINAL_STEP;
-
-		if (!taskId) throw new Error("taskId is required");
-		if (!targetStatus) throw new Error("targetStatus is required");
-		if (orderedTaskIds.length === 0) throw new Error("orderedTaskIds must include at least one task");
-		if (!orderedTaskIds.includes(taskId)) {
-			throw new Error("orderedTaskIds must include the task being moved");
-		}
-
-		const seen = new Set<string>();
-		for (const id of orderedTaskIds) {
-			if (seen.has(id)) {
-				throw new Error(`Duplicate task id ${id} in orderedTaskIds`);
-			}
-			seen.add(id);
-		}
-
-		// Load all tasks from the ordered list - use getTask to include cross-branch tasks from the store
-		const loadedTasks = await Promise.all(
-			orderedTaskIds.map(async (id) => {
-				const task = await this.getTask(id);
-				return task;
-			}),
-		);
-
-		// Filter out any tasks that couldn't be loaded (may have been moved/deleted)
-		const validTasks = loadedTasks.filter((t): t is Task => t !== null);
-
-		// Verify the moved task itself exists
-		const movedTask = validTasks.find((t) => t.id === taskId);
-		if (!movedTask) {
-			throw new Error(`Task ${taskId} not found while reordering`);
-		}
-
-		// Reject reordering tasks from other branches - they can only be modified in their source branch
-		if (movedTask.branch) {
-			throw new Error(
-				`Task ${taskId} exists in branch "${movedTask.branch}" and cannot be reordered from the current branch. Switch to that branch to modify it.`,
-			);
-		}
-
-		const hasTargetMilestone = params.targetMilestone !== undefined;
-		const normalizedTargetMilestone =
-			params.targetMilestone === null
-				? undefined
-				: typeof params.targetMilestone === "string" && params.targetMilestone.trim().length > 0
-					? params.targetMilestone.trim()
-					: undefined;
-
-		// Calculate target index within the valid tasks list
-		const validOrderedIds = orderedTaskIds.filter((id) => validTasks.some((t) => t.id === id));
-		const targetIndex = validOrderedIds.indexOf(taskId);
-
-		if (targetIndex === -1) {
-			throw new Error("Implementation error: Task found in validTasks but index missing");
-		}
-
-		const previousTask = targetIndex > 0 ? validTasks[targetIndex - 1] : null;
-		const nextTask = targetIndex < validTasks.length - 1 ? validTasks[targetIndex + 1] : null;
-
-		const { ordinal: newOrdinal, requiresRebalance } = calculateNewOrdinal({
-			previous: previousTask,
-			next: nextTask,
-			defaultStep,
-		});
-
-		const updatedMoved: Task = {
-			...movedTask,
-			status: targetStatus,
-			...(hasTargetMilestone ? { milestone: normalizedTargetMilestone } : {}),
-			ordinal: newOrdinal,
-		};
-
-		const tasksInOrder: Task[] = validTasks.map((task, index) => (index === targetIndex ? updatedMoved : task));
-		const resolutionUpdates = resolveOrdinalConflicts(tasksInOrder, {
-			defaultStep,
-			startOrdinal: defaultStep,
-			forceSequential: requiresRebalance,
-		});
-
-		const updatesMap = new Map<string, Task>();
-		for (const update of resolutionUpdates) {
-			updatesMap.set(update.id, update);
-		}
-		if (!updatesMap.has(updatedMoved.id)) {
-			updatesMap.set(updatedMoved.id, updatedMoved);
-		}
-
-		const originalMap = new Map(validTasks.map((task) => [task.id, task]));
-		const changedTasks = Array.from(updatesMap.values()).filter((task) => {
-			const original = originalMap.get(task.id);
-			if (!original) return true;
-			return (
-				(original.ordinal ?? null) !== (task.ordinal ?? null) ||
-				(original.status ?? "") !== (task.status ?? "") ||
-				(original.milestone ?? "") !== (task.milestone ?? "")
-			);
-		});
-
-		if (changedTasks.length > 0) {
-			await this.updateTasksBulk(
-				changedTasks,
-				params.commitMessage ?? `Reorder tasks in ${targetStatus}`,
-				params.autoCommit,
-			);
-		}
-
-		const updatedTask = updatesMap.get(taskId) ?? updatedMoved;
-		return { updatedTask, changedTasks };
+		return reorderTask(this, params);
 	}
 
 	// Sequences operations (business logic lives in core, not server)
 	async listActiveSequences(): Promise<{ unsequenced: Task[]; sequences: Sequence[] }> {
-		const all = await this.fs.listTasks();
-		const active = all.filter((t) => (t.status || "").toLowerCase() !== "done");
-		return computeSequences(active);
+		return listActiveSequences(this);
 	}
 
 	async moveTaskInSequences(params: {
@@ -874,34 +359,7 @@ export class Core {
 		unsequenced?: boolean;
 		targetSequenceIndex?: number;
 	}): Promise<{ unsequenced: Task[]; sequences: Sequence[] }> {
-		const taskId = String(params.taskId || "").trim();
-		if (!taskId) throw new Error("taskId is required");
-
-		const allTasks = await this.fs.listTasks();
-		const exists = allTasks.some((t) => t.id === taskId);
-		if (!exists) throw new Error(`Task ${taskId} not found`);
-
-		const active = allTasks.filter((t) => (t.status || "").toLowerCase() !== "done");
-		const { sequences } = computeSequences(active);
-
-		if (params.unsequenced) {
-			const res = planMoveToUnsequenced(allTasks, taskId);
-			if (!res.ok) throw new Error(res.error);
-			await this.updateTasksBulk(res.changed, `Move ${taskId} to Unsequenced`);
-		} else {
-			const targetSequenceIndex = params.targetSequenceIndex;
-			if (targetSequenceIndex === undefined || Number.isNaN(targetSequenceIndex)) {
-				throw new Error("targetSequenceIndex must be a number");
-			}
-			if (targetSequenceIndex < 1) throw new Error("targetSequenceIndex must be >= 1");
-			const changed = planMoveToSequence(allTasks, sequences, taskId, targetSequenceIndex);
-			if (changed.length > 0) await this.updateTasksBulk(changed, `Update deps/order for ${taskId}`);
-		}
-
-		// Return updated sequences
-		const afterAll = await this.fs.listTasks();
-		const afterActive = afterAll.filter((t) => (t.status || "").toLowerCase() !== "done");
-		return computeSequences(afterActive);
+		return moveTaskInSequences(this, params);
 	}
 
 	async archiveTask(taskId: string, autoCommit?: boolean): Promise<boolean> {
