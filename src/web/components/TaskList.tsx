@@ -8,7 +8,7 @@ import type {
 	TaskSearchResult,
 } from "../../types";
 import { collectAvailableLabels } from "../../utils/label-filter.ts";
-import { collectArchivedMilestoneKeys, getMilestoneLabel, milestoneKey } from "../utils/milestones";
+import { buildMilestoneAliasMap, canonicalizeMilestoneValue, collectArchivedMilestoneKeys, getMilestoneLabel, milestoneKey } from "../utils/milestones";
 import CleanupModal from "./CleanupModal";
 import { SuccessToast } from "./SuccessToast";
 import { useAuth } from "../contexts/AuthContext";
@@ -74,137 +74,16 @@ const TaskList: React.FC<TaskListProps> = ({
 	const [showLabelsMenu, setShowLabelsMenu] = useState(false);
 	const labelsButtonRef = useRef<HTMLButtonElement | null>(null);
 	const labelsMenuRef = useRef<HTMLDivElement | null>(null);
-	const milestoneAliasToCanonical = useMemo(() => {
-		const aliasMap = new Map<string, string>();
-		const collectIdAliasKeys = (value: string): string[] => {
-			const normalized = value.trim();
-			const normalizedKey = normalized.toLowerCase();
-			if (!normalizedKey) return [];
-			const keys = new Set<string>([normalizedKey]);
-			if (/^\d+$/.test(normalized)) {
-				const numericAlias = String(Number.parseInt(normalized, 10));
-				keys.add(numericAlias);
-				keys.add(`m-${numericAlias}`);
-				return Array.from(keys);
-			}
-			const idMatch = normalized.match(/^m-(\d+)$/i);
-			if (idMatch?.[1]) {
-				const numericAlias = String(Number.parseInt(idMatch[1], 10));
-				keys.add(`m-${numericAlias}`);
-				keys.add(numericAlias);
-			}
-			return Array.from(keys);
-		};
-		const reservedIdKeys = new Set<string>();
-		for (const milestone of [...(milestoneEntities ?? []), ...(archivedMilestones ?? [])]) {
-			for (const key of collectIdAliasKeys(milestone.id)) {
-				reservedIdKeys.add(key);
-			}
-		}
-		const setAlias = (aliasKey: string, id: string, allowOverwrite: boolean) => {
-			const existing = aliasMap.get(aliasKey);
-			if (!existing) {
-				aliasMap.set(aliasKey, id);
-				return;
-			}
-			if (!allowOverwrite) {
-				return;
-			}
-			const existingKey = existing.toLowerCase();
-			const nextKey = id.toLowerCase();
-			const preferredRawId = /^\d+$/.test(aliasKey) ? `m-${aliasKey}` : /^m-\d+$/.test(aliasKey) ? aliasKey : null;
-			if (preferredRawId) {
-				const existingIsPreferred = existingKey === preferredRawId;
-				const nextIsPreferred = nextKey === preferredRawId;
-				if (existingIsPreferred && !nextIsPreferred) {
-					return;
-				}
-				if (nextIsPreferred && !existingIsPreferred) {
-					aliasMap.set(aliasKey, id);
-				}
-				return;
-			}
-			aliasMap.set(aliasKey, id);
-		};
-		const addIdAliases = (id: string, allowOverwrite = true) => {
-			const idKey = id.toLowerCase();
-			setAlias(idKey, id, allowOverwrite);
-			const idMatch = id.match(/^m-(\d+)$/i);
-			if (!idMatch?.[1]) return;
-			const numericAlias = String(Number.parseInt(idMatch[1], 10));
-			const canonicalId = `m-${numericAlias}`;
-			setAlias(canonicalId, id, allowOverwrite);
-			setAlias(numericAlias, id, allowOverwrite);
-		};
-		const activeTitleCounts = new Map<string, number>();
-		for (const milestone of milestoneEntities ?? []) {
-			const title = milestone.title.trim();
-			if (!title) continue;
-			const titleKey = title.toLowerCase();
-			activeTitleCounts.set(titleKey, (activeTitleCounts.get(titleKey) ?? 0) + 1);
-		};
-		const activeTitleKeys = new Set(activeTitleCounts.keys());
-		for (const milestone of milestoneEntities ?? []) {
-			const id = milestone.id.trim();
-			const title = milestone.title.trim();
-			if (!id) continue;
-			addIdAliases(id, true);
-			if (title && !reservedIdKeys.has(title.toLowerCase()) && activeTitleCounts.get(title.toLowerCase()) === 1) {
-				const titleKey = title.toLowerCase();
-				if (!aliasMap.has(titleKey)) {
-					aliasMap.set(titleKey, id);
-				}
-			}
-		}
-		const archivedTitleCounts = new Map<string, number>();
-		for (const milestone of archivedMilestones ?? []) {
-			const title = milestone.title.trim();
-			if (!title) continue;
-			const titleKey = title.toLowerCase();
-			if (activeTitleKeys.has(titleKey)) continue;
-			archivedTitleCounts.set(titleKey, (archivedTitleCounts.get(titleKey) ?? 0) + 1);
-		}
-		for (const milestone of archivedMilestones ?? []) {
-			const id = milestone.id.trim();
-			const title = milestone.title.trim();
-			if (!id) continue;
-			addIdAliases(id, false);
-			const titleKey = title.toLowerCase();
-			if (
-				title &&
-				!activeTitleKeys.has(titleKey) &&
-				!reservedIdKeys.has(titleKey) &&
-				archivedTitleCounts.get(titleKey) === 1
-			) {
-				if (!aliasMap.has(titleKey)) {
-					aliasMap.set(titleKey, id);
-				}
-			}
-		}
-		return aliasMap;
-	}, [milestoneEntities, archivedMilestones]);
+	const milestoneAliasToCanonical = useMemo(
+		() => buildMilestoneAliasMap(milestoneEntities ?? [], archivedMilestones ?? []),
+		[milestoneEntities, archivedMilestones],
+	);
 	const archivedMilestoneKeys = useMemo(
 		() => new Set(collectArchivedMilestoneKeys(archivedMilestones, milestoneEntities).map((value) => milestoneKey(value))),
 		[archivedMilestones, milestoneEntities],
 	);
 	const canonicalizeMilestone = (value?: string | null): string => {
-		const normalized = (value ?? "").trim();
-		if (!normalized) return "";
-		const key = normalized.toLowerCase();
-		const direct = milestoneAliasToCanonical.get(key);
-		if (direct) {
-			return direct;
-		}
-		const idMatch = normalized.match(/^m-(\d+)$/i);
-		if (idMatch?.[1]) {
-			const numericAlias = String(Number.parseInt(idMatch[1], 10));
-			return milestoneAliasToCanonical.get(`m-${numericAlias}`) ?? milestoneAliasToCanonical.get(numericAlias) ?? normalized;
-		}
-		if (/^\d+$/.test(normalized)) {
-			const numericAlias = String(Number.parseInt(normalized, 10));
-			return milestoneAliasToCanonical.get(`m-${numericAlias}`) ?? milestoneAliasToCanonical.get(numericAlias) ?? normalized;
-		}
-		return normalized;
+		return canonicalizeMilestoneValue(value ?? null, milestoneAliasToCanonical);
 	};
 
 	const sortedBaseTasks = useMemo(() => sortTasksByIdDescending(tasks), [tasks]);
