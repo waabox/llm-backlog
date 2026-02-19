@@ -154,6 +154,35 @@ export class McpServer extends Core {
 		return this.server;
 	}
 
+	/**
+	 * Returns all registered tools as an array.
+	 *
+	 * Useful for HTTP transport where per-request tool filtering is needed.
+	 */
+	public getTools(): McpToolHandler[] {
+		return Array.from(this.tools.values());
+	}
+
+	/**
+	 * Returns all registered resources as an array.
+	 *
+	 * Useful for HTTP transport where per-request server instances need
+	 * access to the full resource set.
+	 */
+	public getResources(): McpResourceHandler[] {
+		return Array.from(this.resources.values());
+	}
+
+	/**
+	 * Returns all registered prompts as an array.
+	 *
+	 * Useful for HTTP transport where per-request server instances need
+	 * access to the full prompt set.
+	 */
+	public getPrompts(): McpPromptHandler[] {
+		return Array.from(this.prompts.values());
+	}
+
 	// -- Internal handlers --------------------------------------------------
 
 	protected async listTools(): Promise<ListToolsResult> {

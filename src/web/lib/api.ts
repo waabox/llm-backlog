@@ -61,8 +61,27 @@ const DEFAULT_CONFIG: RequestConfig = {
 export class ApiClient {
 	private config: RequestConfig;
 
+	private static readonly TOKEN_KEY = "backlog-auth-token";
+
+	static getToken(): string | null {
+		return localStorage.getItem(ApiClient.TOKEN_KEY);
+	}
+
+	static setToken(token: string): void {
+		localStorage.setItem(ApiClient.TOKEN_KEY, token);
+	}
+
+	static clearToken(): void {
+		localStorage.removeItem(ApiClient.TOKEN_KEY);
+	}
+
 	constructor(config: RequestConfig = {}) {
 		this.config = { ...DEFAULT_CONFIG, ...config };
+	}
+
+	private authHeaders(): Record<string, string> {
+		const token = ApiClient.getToken();
+		return token ? { Authorization: `Bearer ${token}` } : {};
 	}
 
 	// Enhanced fetch with retry logic and better error handling
@@ -81,6 +100,7 @@ export class ApiClient {
 					signal: controller.signal,
 					headers: {
 						"Content-Type": "application/json",
+						...this.authHeaders(),
 						...options.headers,
 					},
 				});
@@ -88,6 +108,10 @@ export class ApiClient {
 				clearTimeout(timeoutId);
 
 				if (!response.ok) {
+					if (response.status === 401) {
+						ApiClient.clearToken();
+						window.dispatchEvent(new Event("auth:unauthorized"));
+					}
 					let errorData: unknown = null;
 					try {
 						errorData = await response.json();
@@ -269,7 +293,9 @@ export class ApiClient {
 	}
 
 	async fetchStatuses(): Promise<string[]> {
-		const response = await fetch(`${API_BASE}/statuses`);
+		const response = await fetch(`${API_BASE}/statuses`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch statuses");
 		}
@@ -277,7 +303,9 @@ export class ApiClient {
 	}
 
 	async fetchConfig(): Promise<BacklogConfig> {
-		const response = await fetch(`${API_BASE}/config`);
+		const response = await fetch(`${API_BASE}/config`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch config");
 		}
@@ -289,6 +317,7 @@ export class ApiClient {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
+				...this.authHeaders(),
 			},
 			body: JSON.stringify(config),
 		});
@@ -299,7 +328,9 @@ export class ApiClient {
 	}
 
 	async fetchDocs(): Promise<Document[]> {
-		const response = await fetch(`${API_BASE}/docs`);
+		const response = await fetch(`${API_BASE}/docs`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch documentation");
 		}
@@ -307,7 +338,9 @@ export class ApiClient {
 	}
 
 	async fetchDoc(filename: string): Promise<Document> {
-		const response = await fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`);
+		const response = await fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch document");
 		}
@@ -315,7 +348,9 @@ export class ApiClient {
 	}
 
 	async fetchDocument(id: string): Promise<Document> {
-		const response = await fetch(`${API_BASE}/doc/${encodeURIComponent(id)}`);
+		const response = await fetch(`${API_BASE}/doc/${encodeURIComponent(id)}`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch document");
 		}
@@ -332,6 +367,7 @@ export class ApiClient {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
+				...this.authHeaders(),
 			},
 			body: JSON.stringify(payload),
 		});
@@ -345,6 +381,7 @@ export class ApiClient {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				...this.authHeaders(),
 			},
 			body: JSON.stringify({ filename, content }),
 		});
@@ -355,7 +392,9 @@ export class ApiClient {
 	}
 
 	async fetchDecisions(): Promise<Decision[]> {
-		const response = await fetch(`${API_BASE}/decisions`);
+		const response = await fetch(`${API_BASE}/decisions`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch decisions");
 		}
@@ -363,7 +402,9 @@ export class ApiClient {
 	}
 
 	async fetchDecision(id: string): Promise<Decision> {
-		const response = await fetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`);
+		const response = await fetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch decision");
 		}
@@ -371,7 +412,9 @@ export class ApiClient {
 	}
 
 	async fetchDecisionData(id: string): Promise<Decision> {
-		const response = await fetch(`${API_BASE}/decision/${encodeURIComponent(id)}`);
+		const response = await fetch(`${API_BASE}/decision/${encodeURIComponent(id)}`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch decision");
 		}
@@ -383,6 +426,7 @@ export class ApiClient {
 			method: "PUT",
 			headers: {
 				"Content-Type": "text/plain",
+				...this.authHeaders(),
 			},
 			body: content,
 		});
@@ -396,6 +440,7 @@ export class ApiClient {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				...this.authHeaders(),
 			},
 			body: JSON.stringify({ title }),
 		});
@@ -406,7 +451,9 @@ export class ApiClient {
 	}
 
 	async fetchMilestones(): Promise<Milestone[]> {
-		const response = await fetch(`${API_BASE}/milestones`);
+		const response = await fetch(`${API_BASE}/milestones`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestones");
 		}
@@ -414,7 +461,9 @@ export class ApiClient {
 	}
 
 	async fetchArchivedMilestones(): Promise<Milestone[]> {
-		const response = await fetch(`${API_BASE}/milestones/archived`);
+		const response = await fetch(`${API_BASE}/milestones/archived`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch archived milestones");
 		}
@@ -422,7 +471,9 @@ export class ApiClient {
 	}
 
 	async fetchMilestone(id: string): Promise<Milestone> {
-		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`);
+		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
+			headers: { ...this.authHeaders() },
+		});
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestone");
 		}
@@ -434,6 +485,7 @@ export class ApiClient {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				...this.authHeaders(),
 			},
 			body: JSON.stringify({ title, description }),
 		});
@@ -447,6 +499,7 @@ export class ApiClient {
 	async archiveMilestone(id: string): Promise<{ success: boolean; milestone?: Milestone | null }> {
 		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}/archive`, {
 			method: "POST",
+			headers: { ...this.authHeaders() },
 		});
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({}));
@@ -493,6 +546,38 @@ export class ApiClient {
 				body: JSON.stringify(options),
 			},
 		);
+	}
+
+	async fetchAuthStatus(): Promise<{ enabled: boolean; clientId?: string }> {
+		const response = await fetch(`${API_BASE}/auth/status`);
+		if (!response.ok) throw new Error("Failed to fetch auth status");
+		return response.json();
+	}
+
+	async loginWithGoogle(
+		credential: string,
+	): Promise<{ token: string; user: { email: string; name: string; role: string } }> {
+		const response = await fetch(`${API_BASE}/auth/google`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ credential }),
+		});
+		if (!response.ok) {
+			const data = await response.json().catch(() => ({}));
+			throw new ApiError((data as { error?: string }).error || "Login failed", response.status);
+		}
+		const result = await response.json();
+		ApiClient.setToken(result.token);
+		return result;
+	}
+
+	async fetchMe(): Promise<{ email: string; name: string; role: string }> {
+		return this.fetchJson<{ email: string; name: string; role: string }>(`${API_BASE}/auth/me`);
+	}
+
+	logout(): void {
+		ApiClient.clearToken();
+		window.location.href = "/";
 	}
 }
 

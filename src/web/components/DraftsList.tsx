@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../lib/api';
 import { type Task } from '../../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DraftsListProps {
   onEditTask: (task: Task) => void;
@@ -8,6 +9,8 @@ interface DraftsListProps {
 }
 
 const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft }) => {
+  const { user } = useAuth();
+  const isViewer = user?.role === "viewer";
   const [drafts, setDrafts] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,12 +113,14 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft }) => {
             <div className="text-sm text-gray-600 dark:text-gray-300">
               {drafts.length} draft{drafts.length !== 1 ? 's' : ''}
             </div>
+	            {!isViewer && (
 	            <button 
 	              className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200" 
 	              onClick={onNewDraft}
 	            >
 	              + New Draft
             </button>
+	            )}
           </div>
         </div>
 

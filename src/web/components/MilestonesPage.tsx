@@ -5,6 +5,7 @@ import { buildMilestoneBuckets, collectArchivedMilestoneKeys } from "../utils/mi
 import { type Milestone, type MilestoneBucket, type Task } from "../../types";
 import MilestoneTaskRow from "./MilestoneTaskRow";
 import Modal from "./Modal";
+import { useAuth } from "../contexts/AuthContext";
 
 interface MilestonesPageProps {
 	tasks: Task[];
@@ -23,6 +24,8 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	onEditTask,
 	onRefreshData,
 }) => {
+	const { user } = useAuth();
+	const isViewer = user?.role === "viewer";
 	const [newMilestone, setNewMilestone] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
@@ -347,6 +350,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 								</svg>
 								List
 							</Link>
+							{!isViewer && (
 							<button
 								type="button"
 								onClick={() => handleArchiveMilestone(bucket)}
@@ -358,6 +362,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 								</svg>
 								{isArchiving ? "Archiving..." : "Archive"}
 							</button>
+							)}
 						</div>
 						<button
 							type="button"
@@ -523,6 +528,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							{error}
 						</span>
 					)}
+					{!isViewer && (
 					<button
 						type="button"
 						onClick={() => setShowAddModal(true)}
@@ -530,6 +536,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 					>
 						+ Add milestone
 					</button>
+					)}
 				</div>
 			</div>
 

@@ -13,6 +13,7 @@ import {
 import ErrorBoundary from './ErrorBoundary';
 import { SidebarSkeleton } from './LoadingSpinner';
 import { sanitizeUrlTitle } from '../utils/urlHelpers';
+import { useAuth } from '../contexts/AuthContext';
 import { getWebVersion } from '../utils/version';
 import { apiClient } from '../lib/api';
 
@@ -162,6 +163,8 @@ const SideNavigation = memo(function SideNavigation({
 	error, 
 	onRetry
 }: SideNavigationProps) {
+	const { user } = useAuth();
+	const isViewer = user?.role === "viewer";
 	const [isCollapsed, setIsCollapsed] = useState(() => {
 		const saved = localStorage.getItem('sideNavCollapsed');
 		return saved ? JSON.parse(saved) : false;
@@ -586,6 +589,7 @@ const SideNavigation = memo(function SideNavigation({
 									<span className="text-gray-500 dark:text-gray-400"><Icons.Document /></span>
 									<span className="text-sm font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-400 whitespace-nowrap">Documents ({docs.length})</span>
 								</div>
+									{!isViewer && (
 									<button
 										onClick={handleCreateDocument}
 										className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors duration-200"
@@ -596,6 +600,7 @@ const SideNavigation = memo(function SideNavigation({
 										<circle cx="12" cy="12" r="10" />
 									</svg>
 								</button>
+									)}
 							</div>
 							
 							{/* Document List */}

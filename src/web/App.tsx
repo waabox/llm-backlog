@@ -26,6 +26,8 @@ import {
 } from '../types';
 import { apiClient } from './lib/api';
 import { useHealthCheckContext } from './contexts/HealthCheckContext';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 import { getWebVersion } from './utils/version';
 import { collectArchivedMilestoneKeys, collectMilestoneIds, milestoneKey } from './utils/milestones';
 
@@ -448,6 +450,27 @@ function App() {
       console.error('Failed to archive task:', error);
     }
   };
+
+  const { user, isLoading: authLoading, isAuthEnabled, clientId } = useAuth();
+
+  // Auth gate - show login if auth is enabled but user not authenticated
+  if (authLoading) {
+    return (
+      <ThemeProvider>
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  if (isAuthEnabled && !user && clientId) {
+    return (
+      <ThemeProvider>
+        <LoginPage clientId={clientId} />
+      </ThemeProvider>
+    );
+  }
 
   // Show loading state while checking initialization
   if (isInitialized === null) {

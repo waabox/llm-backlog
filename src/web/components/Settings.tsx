@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../lib/api';
 import { SuccessToast } from './SuccessToast';
 import type { BacklogConfig } from '../../types';
+import { useAuth } from '../contexts/AuthContext';
 
 const Settings: React.FC = () => {
+	const { user } = useAuth();
+	const isViewer = user?.role === "viewer";
 	const [config, setConfig] = useState<BacklogConfig | null>(null);
 	const [originalConfig, setOriginalConfig] = useState<BacklogConfig | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -434,6 +437,7 @@ const Settings: React.FC = () => {
 					</div>
 
 					{/* Save/Cancel Buttons */}
+					{!isViewer && (
 						<div className="flex items-center justify-end space-x-4">
 							<button
 								onClick={handleCancel}
@@ -450,6 +454,7 @@ const Settings: React.FC = () => {
 								{saving ? 'Saving...' : 'Save Changes'}
 							</button>
 						</div>
+					)}
 				</div>
 			</div>
 
