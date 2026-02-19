@@ -55,7 +55,7 @@ export function validateMilestoneName(name: string, existingMilestones: string[]
 	return null;
 }
 
-function buildMilestoneAliasMap(
+export function buildMilestoneAliasMap(
 	milestoneEntities: Milestone[],
 	archivedMilestones: Milestone[] = [],
 ): Map<string, string> {
@@ -173,7 +173,7 @@ function buildMilestoneAliasMap(
 	return aliasMap;
 }
 
-function canonicalizeMilestoneValue(value: string | null | undefined, aliasMap: Map<string, string>): string {
+export function canonicalizeMilestoneValue(value: string | null | undefined, aliasMap: Map<string, string>): string {
 	const normalized = normalizeMilestoneName(value ?? "");
 	if (!normalized) return "";
 	const normalizedKey = milestoneKey(normalized);
