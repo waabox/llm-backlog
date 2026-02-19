@@ -18,12 +18,12 @@ interface TaskSearchIndex {
 }
 
 // Regex pattern to match any prefix (letters followed by dash)
-const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
+export const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
 
 /**
  * Extract prefix from an ID if present (e.g., "task-" from "task-123")
  */
-function extractPrefix(id: string): string | null {
+export function extractPrefix(id: string): string | null {
 	const match = id.match(PREFIX_PATTERN);
 	return match ? match[0] : null;
 }
@@ -31,11 +31,11 @@ function extractPrefix(id: string): string | null {
 /**
  * Strip any prefix from an ID (e.g., "task-123" -> "123", "JIRA-456" -> "456")
  */
-function stripPrefix(id: string): string {
+export function stripPrefix(id: string): string {
 	return id.replace(PREFIX_PATTERN, "");
 }
 
-function createTaskIdVariants(id: string): string[] {
+export function createTaskIdVariants(id: string): string[] {
 	const segments = parseTaskIdSegments(id);
 	const prefix = extractPrefix(id) ?? "task-"; // Default to task- if no prefix
 	const lowerId = id.toLowerCase();
@@ -59,10 +59,15 @@ function createTaskIdVariants(id: string): string[] {
 	// Add just the numeric part
 	variants.add(canonicalSuffix);
 
+	// Also add individual numeric segments for short-query matching (e.g., "7" matching "TASK-0007")
+	for (const segment of segments) {
+		variants.add(String(segment));
+	}
+
 	return Array.from(variants);
 }
 
-function parseTaskIdSegments(value: string): number[] | null {
+export function parseTaskIdSegments(value: string): number[] | null {
 	const withoutPrefix = stripPrefix(value);
 	if (!/^[0-9]+(?:\.[0-9]+)*$/.test(withoutPrefix)) {
 		return null;

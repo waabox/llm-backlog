@@ -1,12 +1,8 @@
 import type { Milestone } from "../../types/index.ts";
 
-export function normalizeMilestoneName(name: string): string {
-	return name.trim();
-}
+export { milestoneKey, normalizeMilestoneName } from "../../core/milestones.ts";
 
-export function milestoneKey(name: string): string {
-	return normalizeMilestoneName(name).toLowerCase();
-}
+import { milestoneKey, normalizeMilestoneName } from "../../core/milestones.ts";
 
 function buildMilestoneLookupKeys(name: string): string[] {
 	const normalized = normalizeMilestoneName(name);

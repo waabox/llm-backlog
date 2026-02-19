@@ -1,4 +1,5 @@
 import { rename as moveFile } from "node:fs/promises";
+import { collectArchivedMilestoneKeys } from "../../../core/milestones.ts";
 import type { Milestone, Task } from "../../../types/index.ts";
 import { McpError } from "../../errors/mcp-errors.ts";
 import type { McpServer } from "../../server.ts";
@@ -31,24 +32,6 @@ export type MilestoneRemoveArgs = {
 export type MilestoneArchiveArgs = {
 	name: string;
 };
-
-function collectArchivedMilestoneKeys(archivedMilestones: Milestone[], activeMilestones: Milestone[]): string[] {
-	const keys = new Set<string>();
-	const activeTitleKeys = new Set(activeMilestones.map((milestone) => milestoneKey(milestone.title)).filter(Boolean));
-
-	for (const milestone of archivedMilestones) {
-		const idKey = milestoneKey(milestone.id);
-		if (idKey) {
-			keys.add(idKey);
-		}
-		const titleKey = milestoneKey(milestone.title);
-		if (titleKey && !activeTitleKeys.has(titleKey)) {
-			keys.add(titleKey);
-		}
-	}
-
-	return Array.from(keys);
-}
 
 function formatListBlock(title: string, items: string[]): string {
 	if (items.length === 0) {

@@ -9,40 +9,20 @@ import { getTaskStatistics } from "../core/statistics.ts";
 import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
 import type { SearchPriorityFilter, SearchResultType, Task, TaskUpdateInput } from "../types/index.ts";
 import { watchConfig } from "../utils/config-watcher.ts";
+import { PREFIX_PATTERN, parseTaskIdSegments, stripPrefix } from "../utils/task-search.ts";
 import { getVersion } from "../utils/version.ts";
 import { ConfigRepoService } from "./auth/config-repo";
 import { verifyGoogleToken } from "./auth/google-verify";
 import { signJwt, verifyJwt } from "./auth/jwt";
 import { authenticateRequest, extractBearerToken } from "./auth/middleware";
 
-// Regex pattern to match any prefix (letters followed by dash)
-const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
 const DEFAULT_PREFIX = "task-";
 
-/**
- * Strip any prefix from an ID (e.g., "task-123" -> "123", "JIRA-456" -> "456")
- */
-function stripPrefix(id: string): string {
-	return id.replace(PREFIX_PATTERN, "");
-}
-
-/**
- * Ensure an ID has a prefix. If it already has one, return as-is.
- * Otherwise, add the default "task-" prefix.
- */
 function ensurePrefix(id: string): string {
 	if (PREFIX_PATTERN.test(id)) {
 		return id;
 	}
 	return `${DEFAULT_PREFIX}${id}`;
-}
-
-function parseTaskIdSegments(value: string): number[] | null {
-	const withoutPrefix = stripPrefix(value);
-	if (!/^[0-9]+(?:\.[0-9]+)*$/.test(withoutPrefix)) {
-		return null;
-	}
-	return withoutPrefix.split(".").map((segment) => Number.parseInt(segment, 10));
 }
 
 function findTaskByLooseId(tasks: Task[], inputId: string): Task | undefined {

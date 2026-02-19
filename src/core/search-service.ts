@@ -10,6 +10,7 @@ import type {
 	SearchResultType,
 	Task,
 } from "../types/index.ts";
+import { createTaskIdVariants, extractPrefix, parseTaskIdSegments, stripPrefix } from "../utils/task-search.ts";
 import type { ContentStore, ContentStoreEvent } from "./content-store.ts";
 
 interface BaseSearchEntity {
@@ -46,64 +47,6 @@ type NormalizedFilters = {
 	priorities?: SearchPriorityFilter[];
 	labels?: string[];
 };
-
-// Regex pattern to match any prefix (letters followed by dash)
-const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
-
-/**
- * Extract prefix from an ID if present (e.g., "task-" from "task-123")
- */
-function extractPrefix(id: string): string | null {
-	const match = id.match(PREFIX_PATTERN);
-	return match ? match[0] : null;
-}
-
-/**
- * Strip any prefix from an ID (e.g., "task-123" -> "123", "JIRA-456" -> "456")
- */
-function stripPrefix(id: string): string {
-	return id.replace(PREFIX_PATTERN, "");
-}
-
-function parseTaskIdSegments(value: string): number[] | null {
-	const withoutPrefix = stripPrefix(value.toLowerCase());
-	if (!/^[0-9]+(?:\.[0-9]+)*$/.test(withoutPrefix)) {
-		return null;
-	}
-	return withoutPrefix.split(".").map((segment) => Number.parseInt(segment, 10));
-}
-
-function createTaskIdVariants(id: string): string[] {
-	const lowerId = id.toLowerCase();
-	const segments = parseTaskIdSegments(id);
-	const prefix = extractPrefix(id) ?? "task-"; // Default to task- if no prefix
-
-	if (!segments) {
-		// Non-numeric ID - just return the ID and its lowercase variant
-		return id === lowerId ? [id] : [id, lowerId];
-	}
-
-	const canonicalSuffix = segments.join(".");
-	const variants = new Set<string>();
-
-	// Add original ID and lowercase variant
-	variants.add(id);
-	variants.add(lowerId);
-
-	// Add with extracted/default prefix
-	variants.add(`${prefix}${canonicalSuffix}`);
-	variants.add(`${prefix.toLowerCase()}${canonicalSuffix}`);
-
-	// Add just the numeric part
-	variants.add(canonicalSuffix);
-
-	// Also add individual numeric segments for short-query matching (e.g., "7" matching "TASK-0007")
-	for (const segment of segments) {
-		variants.add(String(segment));
-	}
-
-	return Array.from(variants);
-}
 
 export class SearchService {
 	private initialized = false;
