@@ -380,6 +380,16 @@ export class Core {
 		return archiveTask(this, taskId, autoCommit);
 	}
 
+	async createMilestone(title: string, description?: string, autoCommit?: boolean): Promise<Milestone> {
+		const milestone = await this.fs.createMilestone(title, description);
+		if (await this.shouldAutoCommit(autoCommit)) {
+			const backlogDir = DEFAULT_DIRECTORIES.BACKLOG;
+			const repoRoot = await this.git.stageBacklogDirectory(backlogDir);
+			await this.git.commitChanges(`backlog: Create milestone ${milestone.id}`, repoRoot);
+		}
+		return milestone;
+	}
+
 	async archiveMilestone(
 		identifier: string,
 		autoCommit?: boolean,

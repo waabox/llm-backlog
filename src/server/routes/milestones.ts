@@ -79,7 +79,7 @@ export async function handleCreateMilestone(req: Request, core: Core): Promise<R
 			return Response.json({ error: "A milestone with this title or ID already exists" }, { status: 400 });
 		}
 
-		const milestone = await core.filesystem.createMilestone(title, body.description);
+		const milestone = await core.createMilestone(title, body.description);
 		return Response.json(milestone, { status: 201 });
 	} catch (error) {
 		console.error("Error creating milestone:", error);

@@ -256,7 +256,7 @@ export class MilestoneHandlers {
 		}
 
 		// Create milestone file
-		const milestone = await this.core.filesystem.createMilestone(name, args.description);
+		const milestone = await this.core.createMilestone(name, args.description);
 
 		return {
 			content: [
