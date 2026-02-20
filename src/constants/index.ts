@@ -24,6 +24,8 @@ export const DEFAULT_DIRECTORIES = {
 	DECISIONS: "decisions",
 	/** Milestones directory */
 	MILESTONES: "milestones",
+	/** Assets directory */
+	ASSETS: "assets",
 } as const;
 
 /**
