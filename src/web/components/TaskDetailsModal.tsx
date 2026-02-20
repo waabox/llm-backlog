@@ -630,6 +630,18 @@ export const TaskDetailsModal: React.FC<Props> = ({
             </div>
           )}
 
+          {/* Attachments */}
+          {!isFromOtherBranch && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+              <SectionHeader title="Attachments" />
+              {task ? (
+                <TaskAttachments taskId={task.id} />
+              ) : (
+                <p className="text-sm text-gray-400 dark:text-gray-500">Save the task first to add attachments.</p>
+              )}
+            </div>
+          )}
+
           {/* References */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
             <SectionHeader title="References" />
@@ -703,14 +715,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
               )}
             </div>
           </div>
-
-          {/* Attachments */}
-          {task && mode !== "create" && !isFromOtherBranch && (
-            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-              <SectionHeader title="Attachments" />
-              <TaskAttachments taskId={task.id} />
-            </div>
-          )}
 
           {/* Documentation */}
           {documentation.length > 0 && (

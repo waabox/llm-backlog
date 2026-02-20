@@ -354,8 +354,9 @@ function AppRoutes() {
       }
     }
 
-    handleCloseModal();
+    setEditingTask(createdTask);
     await refreshData();
+    return false; // tell handleSave: do NOT call onClose(), modal transitions to preview
   };
 
   const handleArchiveTask = async (taskId: string) => {
