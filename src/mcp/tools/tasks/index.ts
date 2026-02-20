@@ -93,5 +93,25 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	server.addTool(completeTaskTool);
 }
 
+/**
+ * Creates a per-request task_take tool with the current user's name baked in.
+ * Used by the HTTP transport to inject authenticated user context into the tool.
+ */
+export function createTakeTaskTool(server: McpServer, currentUser: string): McpToolHandler {
+	const handlers = new TaskHandlers(server);
+	return createSimpleValidatedTool(
+		{
+			name: "task_take",
+			description: `Assign a task to yourself (${currentUser})`,
+			inputSchema: {
+				properties: { id: { type: "string", description: "Task ID to take" } },
+				required: ["id"],
+			},
+		},
+		{ properties: { id: { type: "string" } }, required: ["id"] },
+		async (input) => handlers.takeTask({ id: input.id as string, assignee: currentUser }),
+	);
+}
+
 export type { TaskCreateArgs, TaskEditArgs, TaskListArgs, TaskSearchArgs } from "./handlers.ts";
 export { taskArchiveSchema, taskCompleteSchema, taskListSchema, taskSearchSchema, taskViewSchema } from "./schemas.ts";

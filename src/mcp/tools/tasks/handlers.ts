@@ -419,6 +419,10 @@ export class TaskHandlers {
 		return await formatTaskCallResult(refreshed);
 	}
 
+	async takeTask(args: { id: string; assignee: string }): Promise<CallToolResult> {
+		return this.editTask({ id: args.id, assignee: [args.assignee] });
+	}
+
 	async editTask(args: TaskEditRequest): Promise<CallToolResult> {
 		try {
 			const updateInput = buildTaskUpdateInput(args);

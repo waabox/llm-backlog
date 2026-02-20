@@ -29,6 +29,7 @@ import { getPackageName } from "../utils/app-info.ts";
 import { getVersion } from "../utils/version.ts";
 import { filterToolsByRole } from "./auth/tool-filter.ts";
 import { createMcpServer } from "./server.ts";
+import { createTakeTaskTool } from "./tools/tasks/index.ts";
 import type { McpPromptHandler, McpResourceHandler, McpToolHandler } from "./types.ts";
 
 export type McpRequestHandlerOptions = {
@@ -70,6 +71,7 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 	async function handleRequest(req: Request): Promise<Response> {
 		// Auth check
 		let userRole: "admin" | "viewer" | undefined;
+		let authenticatedUser: AuthUser | undefined;
 		if (authEnabled) {
 			const url = new URL(req.url);
 			const token =
@@ -82,11 +84,17 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 				return Response.json({ error: "Unauthorized" }, { status: 401 });
 			}
 			userRole = user.role;
+			authenticatedUser = user;
 		}
 
 		// Get tools filtered by role, plus all resources and prompts
 		const allTools = mcpServer.getTools();
 		const filteredTools = filterToolsByRole(allTools, userRole);
+
+		// Inject task_take for authenticated admins (write operation, not available to viewers)
+		if (authenticatedUser && userRole !== "viewer") {
+			filteredTools.push(createTakeTaskTool(mcpServer, authenticatedUser.name));
+		}
 		const allResources = mcpServer.getResources();
 		const allPrompts = mcpServer.getPrompts();
 
