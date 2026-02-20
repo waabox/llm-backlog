@@ -1,3 +1,4 @@
+import { DEFAULT_DIRECTORIES } from "../../constants/index.ts";
 import type { Core } from "../../core/backlog.ts";
 
 export async function handleListAssets(taskId: string, core: Core): Promise<Response> {
@@ -21,10 +22,9 @@ export async function handleUploadAsset(req: Request, taskId: string, core: Core
 		const buffer = await file.arrayBuffer();
 		const metadata = await core.filesystem.assets.saveAsset(taskId, file.name, buffer);
 
-		const config = await core.filesystem.loadConfig();
-		if (config?.autoCommit) {
-			const filePath = core.filesystem.assets.getAssetPath(taskId, metadata.filename);
-			await core.git.commitFiles(`Add asset ${metadata.originalName} to ${taskId}`, [filePath]);
+		if (await core.shouldAutoCommit()) {
+			const repoRoot = await core.git.stageBacklogDirectory(DEFAULT_DIRECTORIES.BACKLOG);
+			await core.git.commitChanges(`backlog: Add asset ${metadata.originalName} to ${taskId}`, repoRoot);
 		}
 
 		return Response.json(metadata, { status: 201 });
@@ -40,9 +40,9 @@ export async function handleDeleteAsset(taskId: string, filename: string, core: 
 		const filePath = core.filesystem.assets.getAssetPath(taskId, filename);
 		await core.filesystem.assets.deleteAsset(taskId, filename);
 
-		const config = await core.filesystem.loadConfig();
-		if (config?.autoCommit) {
-			await core.git.commitFiles(`Remove asset ${filename} from ${taskId}`, [filePath]);
+		if (await core.shouldAutoCommit()) {
+			const repoRoot = await core.git.stageBacklogDirectory(DEFAULT_DIRECTORIES.BACKLOG);
+			await core.git.commitChanges(`backlog: Remove asset ${filename} from ${taskId}`, repoRoot);
 		}
 
 		return Response.json({ success: true });
