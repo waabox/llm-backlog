@@ -53,7 +53,7 @@ function App() {
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const { isOnline } = useHealthCheckContext();
+  const { isOnline, setMessageHandler } = useHealthCheckContext();
   const previousOnlineRef = useRef<boolean | null>(null);
   const hasBeenRunningRef = useRef(false);
 
@@ -268,18 +268,14 @@ function App() {
   }, [tasks, editingTask, showModal]);
 
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
-    ws.onmessage = (event) => {
-      if (event.data === "tasks-updated") {
+    setMessageHandler((data) => {
+      if (data === "tasks-updated") {
         refreshData();
-      } else if (event.data === "config-updated") {
-        // Reload statuses when config changes
+      } else if (data === "config-updated") {
         loadAllData();
       }
-    };
-    return () => ws.close();
-  }, [refreshData, loadAllData]);
+    });
+  }, [setMessageHandler, refreshData, loadAllData]);
 
   const handleSubmitTask = async (taskData: Partial<Task>) => {
     // Don't catch errors here - let TaskDetailsModal handle them

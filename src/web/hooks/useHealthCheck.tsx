@@ -5,10 +5,15 @@ const RECONNECT_DELAY = 5000; // 5 seconds
 export function useHealthCheck() {
 	const [isOnline, setIsOnline] = useState(true);
 	const [wasDisconnected, setWasDisconnected] = useState(false);
-	
+
 	const wsRef = useRef<WebSocket | null>(null);
 	const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const isMountedRef = useRef(true);
+	const onMessageRef = useRef<((data: string) => void) | null>(null);
+
+	const setMessageHandler = useCallback((handler: (data: string) => void) => {
+		onMessageRef.current = handler;
+	}, []);
 
 	const connectWebSocket = useCallback(() => {
 		if (!isMountedRef.current) {
@@ -29,13 +34,17 @@ export function useHealthCheck() {
 		try {
 			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 			const wsUrl = `${protocol}//${window.location.host}`;
-			
+
 			const ws = new WebSocket(wsUrl);
 			wsRef.current = ws;
 
 			ws.onopen = () => {
 				setIsOnline(true);
 				setWasDisconnected(false);
+			};
+
+			ws.onmessage = (event) => {
+				onMessageRef.current?.(event.data as string);
 			};
 
 			ws.onclose = () => {
@@ -99,5 +108,6 @@ export function useHealthCheck() {
 		isOnline,
 		wasDisconnected,
 		retry,
+		setMessageHandler,
 	};
 }

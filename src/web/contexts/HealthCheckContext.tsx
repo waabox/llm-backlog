@@ -6,6 +6,7 @@ interface HealthCheckContextType {
 	isOnline: boolean;
 	wasDisconnected: boolean;
 	retry: () => void;
+	setMessageHandler: (handler: (data: string) => void) => void;
 }
 
 const HealthCheckContext = createContext<HealthCheckContextType | undefined>(undefined);
