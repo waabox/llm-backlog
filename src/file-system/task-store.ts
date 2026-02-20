@@ -85,8 +85,7 @@ export class TaskStore {
 		}
 	}
 
-	async listTasks(filter?: TaskListFilter): Promise<Task[]> {
-		// Get configured task prefix
+	private async scanTaskFiles(baseDir: string): Promise<Task[]> {
 		const config = await this.loadConfig();
 		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
 		const globPattern = buildGlobPattern(taskPrefix);
@@ -94,19 +93,19 @@ export class TaskStore {
 		let taskFiles: string[] = [];
 		try {
 			const topLevel = await Array.fromAsync(
-				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.tasksDir, followSymlinks: true }),
+				new Bun.Glob(`*/${globPattern}`).scan({ cwd: baseDir, followSymlinks: true }),
 			);
 			const subtasks = await Array.fromAsync(
-				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.tasksDir, followSymlinks: true }),
+				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: baseDir, followSymlinks: true }),
 			);
 			taskFiles = [...topLevel, ...subtasks];
 		} catch {
 			return [];
 		}
 
-		let tasks: Task[] = [];
+		const tasks: Task[] = [];
 		for (const file of taskFiles) {
-			const filepath = join(this.tasksDir, file);
+			const filepath = join(baseDir, file);
 			try {
 				const content = await Bun.file(filepath).text();
 				const task = normalizeTaskIdentity(parseTask(content));
@@ -117,145 +116,61 @@ export class TaskStore {
 				}
 			}
 		}
+		return tasks;
+	}
 
+	async listTasks(filter?: TaskListFilter): Promise<Task[]> {
+		let tasks = await this.scanTaskFiles(this.tasksDir);
 		if (filter?.status) {
 			const statusLower = filter.status.toLowerCase();
 			tasks = tasks.filter((t) => t.status.toLowerCase() === statusLower);
 		}
-
 		if (filter?.assignee) {
 			const assignee = filter.assignee;
 			tasks = tasks.filter((t) => t.assignee.includes(assignee));
 		}
-
 		return sortByTaskId(tasks);
 	}
 
 	async listCompletedTasks(): Promise<Task[]> {
-		// Get configured task prefix
-		const config = await this.loadConfig();
-		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
-		const globPattern = buildGlobPattern(taskPrefix);
-
-		let taskFiles: string[] = [];
-		try {
-			const topLevel = await Array.fromAsync(
-				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.completedDir, followSymlinks: true }),
-			);
-			const subtasks = await Array.fromAsync(
-				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.completedDir, followSymlinks: true }),
-			);
-			taskFiles = [...topLevel, ...subtasks];
-		} catch {
-			return [];
-		}
-
-		const tasks: Task[] = [];
-		for (const file of taskFiles) {
-			const filepath = join(this.completedDir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const task = parseTask(content);
-				tasks.push({ ...task, filePath: filepath });
-			} catch (error) {
-				if (process.env.DEBUG) {
-					console.error(`Failed to parse completed task file ${filepath}`, error);
-				}
-			}
-		}
-
-		return sortByTaskId(tasks);
+		return sortByTaskId(await this.scanTaskFiles(this.completedDir));
 	}
 
 	async listArchivedTasks(): Promise<Task[]> {
-		// Get configured task prefix
-		const config = await this.loadConfig();
-		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
-		const globPattern = buildGlobPattern(taskPrefix);
+		return sortByTaskId(await this.scanTaskFiles(this.archiveTasksDir));
+	}
 
-		let taskFiles: string[] = [];
+	private async moveTaskEntry(taskId: string, targetDir: string): Promise<boolean> {
 		try {
-			const topLevel = await Array.fromAsync(
-				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.archiveTasksDir, followSymlinks: true }),
-			);
-			const subtasks = await Array.fromAsync(
-				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.archiveTasksDir, followSymlinks: true }),
-			);
-			taskFiles = [...topLevel, ...subtasks];
-		} catch {
-			return [];
-		}
+			const prefix = extractAnyPrefix(taskId) ?? "task";
+			const normalized = normalizeId(taskId, prefix);
 
-		const tasks: Task[] = [];
-		for (const file of taskFiles) {
-			const filepath = join(this.archiveTasksDir, file);
-			try {
-				const content = await Bun.file(filepath).text();
-				const task = parseTask(content);
-				tasks.push({ ...task, filePath: filepath });
-			} catch (error) {
-				if (process.env.DEBUG) {
-					console.error(`Failed to parse archived task file ${filepath}`, error);
-				}
+			if (isSubtaskId(normalized)) {
+				const core = { filesystem: { tasksDir: this.tasksDir } };
+				const sourcePath = await getTaskPath(normalized, core as TaskPathContext);
+				const relativeFilename = await getTaskFilename(normalized, core as TaskPathContext);
+				if (!sourcePath || !relativeFilename) return false;
+				const targetPath = join(targetDir, relativeFilename);
+				await ensureDirectoryExists(dirname(targetPath));
+				await rename(sourcePath, targetPath);
+			} else {
+				const folderName = idForFilename(normalized);
+				const sourceFolder = join(this.tasksDir, folderName);
+				const targetFolder = join(targetDir, folderName);
+				await ensureDirectoryExists(dirname(targetFolder));
+				await rename(sourceFolder, targetFolder);
 			}
+			return true;
+		} catch {
+			return false;
 		}
-
-		return sortByTaskId(tasks);
 	}
 
 	async archiveTask(taskId: string): Promise<boolean> {
-		try {
-			const prefix = extractAnyPrefix(taskId) ?? "task";
-			const normalized = normalizeId(taskId, prefix);
-
-			if (isSubtaskId(normalized)) {
-				// Subtask: move just the .md file
-				const core = { filesystem: { tasksDir: this.tasksDir } };
-				const sourcePath = await getTaskPath(normalized, core as TaskPathContext);
-				const relativeFilename = await getTaskFilename(normalized, core as TaskPathContext);
-				if (!sourcePath || !relativeFilename) return false;
-				const targetPath = join(this.archiveTasksDir, relativeFilename);
-				await ensureDirectoryExists(dirname(targetPath));
-				await rename(sourcePath, targetPath);
-			} else {
-				// Top-level task: move entire folder
-				const folderName = idForFilename(normalized);
-				const sourceFolder = join(this.tasksDir, folderName);
-				const targetFolder = join(this.archiveTasksDir, folderName);
-				await ensureDirectoryExists(dirname(targetFolder));
-				await rename(sourceFolder, targetFolder);
-			}
-			return true;
-		} catch {
-			return false;
-		}
+		return this.moveTaskEntry(taskId, this.archiveTasksDir);
 	}
 
 	async completeTask(taskId: string): Promise<boolean> {
-		try {
-			const prefix = extractAnyPrefix(taskId) ?? "task";
-			const normalized = normalizeId(taskId, prefix);
-
-			if (isSubtaskId(normalized)) {
-				// Subtask: move just the .md file
-				const core = { filesystem: { tasksDir: this.tasksDir } };
-				const sourcePath = await getTaskPath(normalized, core as TaskPathContext);
-				const relativeFilename = await getTaskFilename(normalized, core as TaskPathContext);
-				if (!sourcePath || !relativeFilename) return false;
-				const targetPath = join(this.completedDir, relativeFilename);
-				await ensureDirectoryExists(dirname(targetPath));
-				await rename(sourcePath, targetPath);
-			} else {
-				// Top-level task: move entire folder
-				const folderName = idForFilename(normalized);
-				const sourceFolder = join(this.tasksDir, folderName);
-				const targetFolder = join(this.completedDir, folderName);
-				await ensureDirectoryExists(dirname(targetFolder));
-				await rename(sourceFolder, targetFolder);
-			}
-			return true;
-		} catch {
-			return false;
-		}
+		return this.moveTaskEntry(taskId, this.completedDir);
 	}
 }
