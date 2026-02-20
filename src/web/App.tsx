@@ -320,23 +320,37 @@ function AppRoutes() {
     });
   }, [setMessageHandler, refreshData, loadAllData]);
 
-  const handleSubmitTask = async (taskData: Partial<Task>) => {
+  const handleSubmitTask = async (taskData: Partial<Task>): Promise<void | boolean> => {
     // Don't catch errors here - let TaskDetailsModal handle them
+    const capturedParentId = pendingParentTaskId;
+
     if (editingTask) {
       await apiClient.updateTask(editingTask.id, taskData);
-    } else {
-      const createdTask = await apiClient.createTask(
-        (pendingParentTaskId ? { ...taskData, parentTaskId: pendingParentTaskId } : taskData) as Omit<Task, "id" | "createdDate">
-      );
-
-      // Show task creation confirmation
-      setTaskConfirmation({ task: createdTask });
-
-      // Auto-dismiss after 4 seconds
-      setTimeout(() => {
-        setTaskConfirmation(null);
-      }, 4000);
+      handleCloseModal();
+      await refreshData();
+      return;
     }
+
+    // Create mode
+    const createdTask = await apiClient.createTask(
+      (capturedParentId ? { ...taskData, parentTaskId: capturedParentId } : taskData) as Omit<Task, "id" | "createdDate">
+    );
+
+    // Show task creation confirmation
+    setTaskConfirmation({ task: createdTask });
+    setTimeout(() => { setTaskConfirmation(null); }, 4000);
+
+    if (capturedParentId) {
+      // Subtask created: navigate back to the parent task instead of closing
+      setPendingParentTaskId(null);
+      const freshParent = await apiClient.fetchTask(capturedParentId);
+      await refreshData();
+      if (freshParent) {
+        setEditingTask(freshParent); // modal transitions to parent task preview
+        return false; // tell handleSave: do NOT call onClose()
+      }
+    }
+
     handleCloseModal();
     await refreshData();
   };
@@ -520,6 +534,7 @@ function AppRoutes() {
         definitionOfDoneDefaults={config?.definitionOfDone ?? []}
         onOpenTask={handleOpenTask}
         onAddSubtask={handleAddSubtask}
+        parentTaskId={pendingParentTaskId ?? undefined}
       />
 
       {/* Task Creation Confirmation Toast */}

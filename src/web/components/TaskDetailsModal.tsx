@@ -19,7 +19,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSaved?: () => Promise<void> | void; // refresh callback
-  onSubmit?: (taskData: Partial<Task>) => Promise<void>; // For creating new tasks
+  onSubmit?: (taskData: Partial<Task>) => Promise<void | boolean>; // For creating new tasks; return false to keep modal open
   onArchive?: () => void; // For archiving tasks
   availableStatuses?: string[]; // Available statuses for new tasks
   availableMilestones?: string[];
@@ -28,6 +28,7 @@ interface Props {
   definitionOfDoneDefaults?: string[];
   onOpenTask?: (task: Task) => void;
   onAddSubtask?: (parentId: string) => void;
+  parentTaskId?: string; // Set in create mode when creating a subtask
 }
 
 type Mode = "preview" | "edit" | "create";
@@ -67,6 +68,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   definitionOfDoneDefaults,
   onOpenTask,
   onAddSubtask,
+  parentTaskId,
 }) => {
   const { theme } = useTheme();
   const isCreateMode = !task;
@@ -185,7 +187,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     setError(null);
     // Preload tasks for dependency picker
     apiClient.fetchTasks().then(setAvailableTasks).catch(() => setAvailableTasks([]));
-    if (task && (task.subtaskSummaries?.length ?? 0) > 0) {
+    if (task) {
       apiClient.fetchTasks({ parent: task.id })
         .then(setSubtasks)
         .catch(() => setSubtasks([]));
@@ -337,10 +339,11 @@ export const TaskDetailsModal: React.FC<Props> = ({
 
       if (isCreateMode && onSubmit) {
         Object.assign(taskData, buildDefinitionOfDoneCreatePayload());
-        // Create new task
-        await onSubmit(taskData);
-        // Only close if successful (no error thrown)
-        onClose();
+        // Create new task; onSubmit returns false to keep modal open (e.g. navigate to parent)
+        const result = await onSubmit(taskData);
+        if (result !== false) {
+          onClose();
+        }
       } else if (task) {
         Object.assign(taskData, buildDefinitionOfDoneEditPayload());
         // Update existing task
@@ -473,7 +476,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
         }
         onClose();
       }}
-      title={isCreateMode ? "Create New Task" : `${displayId} — ${task.title}`}
+      title={isCreateMode
+        ? (parentTaskId ? `Create Sub Task for ${parentTaskId.toUpperCase()}` : "Create New Task")
+        : `${displayId} — ${task.title}`}
       maxWidthClass="max-w-5xl"
       disableEscapeClose={mode === "edit" || mode === "create"}
       actions={
