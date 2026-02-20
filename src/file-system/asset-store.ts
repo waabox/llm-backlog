@@ -38,7 +38,7 @@ export class AssetStore {
 
 	getBucket(taskId: string): string {
 		const match = taskId.match(/\d+/);
-		const num = match ? parseInt(match[0], 10) : 0;
+		const num = match ? Number.parseInt(match[0], 10) : 0;
 		return Math.floor(num / 100)
 			.toString()
 			.padStart(3, "0");

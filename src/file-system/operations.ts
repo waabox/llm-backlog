@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { DEFAULT_DIRECTORIES, DEFAULT_FILES } from "../constants/index.ts";
 import type { BacklogConfig, Decision, Document, Milestone, Task, TaskListFilter } from "../types/index.ts";
 import { generateNextId } from "../utils/prefix-config.ts";
+import { AssetStore } from "./asset-store.ts";
 import { ConfigStore } from "./config-store.ts";
 import { DecisionStore } from "./decision-store.ts";
 import { DocumentStore } from "./document-store.ts";
@@ -19,6 +20,7 @@ export class FileSystem {
 	private readonly decisionStore: DecisionStore;
 	private readonly documentStore: DocumentStore;
 	private readonly milestoneStore: MilestoneStore;
+	private readonly assetStore: AssetStore;
 	private migrationChecked = false;
 
 	constructor(projectRoot: string) {
@@ -41,6 +43,7 @@ export class FileSystem {
 			join(this.backlogDir, DEFAULT_DIRECTORIES.MILESTONES),
 			join(this.backlogDir, DEFAULT_DIRECTORIES.ARCHIVE_MILESTONES),
 		);
+		this.assetStore = new AssetStore(join(this.backlogDir, DEFAULT_DIRECTORIES.ASSETS));
 	}
 
 	private async getBacklogDir(): Promise<string> {
@@ -73,6 +76,14 @@ export class FileSystem {
 
 	get docsDir(): string {
 		return join(this.backlogDir, DEFAULT_DIRECTORIES.DOCS);
+	}
+
+	get assetsDir(): string {
+		return join(this.backlogDir, DEFAULT_DIRECTORIES.ASSETS);
+	}
+
+	get assets(): AssetStore {
+		return this.assetStore;
 	}
 
 	get milestonesDir(): string {
