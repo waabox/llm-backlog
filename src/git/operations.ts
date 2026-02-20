@@ -64,6 +64,19 @@ export class GitOperations {
 		await this.pushIfEnabled(repoRoot);
 	}
 
+	async commitAndPush(message: string, repoRoot?: string | null): Promise<void> {
+		const args = ["commit", "-m", message];
+		if (this.config?.bypassGitHooks) {
+			args.push("--no-verify");
+		}
+		await this.execGit(args, { cwd: repoRoot ?? undefined });
+		try {
+			await this.execGit(["push", "origin", "HEAD"], { cwd: repoRoot ?? undefined });
+		} catch (error) {
+			console.error("Config push failed (non-fatal):", error);
+		}
+	}
+
 	async commitFiles(message: string, filePaths: string[], repoRoot?: string | null): Promise<void> {
 		const uniqueFilePaths = Array.from(new Set(filePaths.map((path) => path.trim()).filter((path) => path.length > 0)));
 		if (uniqueFilePaths.length === 0) {
