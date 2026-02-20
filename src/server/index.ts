@@ -15,6 +15,7 @@ import { handleDeleteAsset, handleListAssets, handleUploadAsset } from "./routes
 import { handleGetMe, handleGoogleLogin } from "./routes/auth.ts";
 import {
 	handleGetConfig,
+	handleUpdateConfig,
 	handleGetStatistics,
 	handleGetStatus,
 	handleGetStatuses,
@@ -275,6 +276,11 @@ export class BacklogServer {
 					},
 					"/api/config": {
 						GET: this.protect(async () => await handleGetConfig(this.core)),
+						PUT: this.protect(async (req: Request) => {
+							const res = await handleUpdateConfig(this.core, req);
+							if (res.ok) this.broadcastConfigUpdated();
+							return res;
+						}),
 					},
 					"/api/docs": {
 						GET: this.protect(async () => await handleListDocs(this.core)),

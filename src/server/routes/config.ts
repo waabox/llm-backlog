@@ -1,3 +1,4 @@
+import type { BacklogConfig } from "../../types/index.ts";
 import type { Core } from "../../core/backlog.ts";
 import { getTaskStatistics } from "../../core/statistics.ts";
 import { getVersion } from "../../utils/version.ts";
@@ -66,5 +67,27 @@ export async function handleGetStatistics(core: Core): Promise<Response> {
 	} catch (error) {
 		console.error("Error getting statistics:", error);
 		return Response.json({ error: "Failed to get statistics" }, { status: 500 });
+	}
+}
+
+export async function handleUpdateConfig(core: Core, req: Request): Promise<Response> {
+	try {
+		const body = (await req.json()) as Partial<BacklogConfig>;
+		const current = await core.filesystem.loadConfig();
+		if (!current) {
+			return Response.json({ error: "Configuration not found" }, { status: 404 });
+		}
+		const updated: BacklogConfig = { ...current, ...body };
+		await core.filesystem.saveConfig(updated);
+		try {
+			await core.git.addFile(core.filesystem.configFilePath);
+			await core.git.commitAndPush("chore(config): update project configuration");
+		} catch (gitError) {
+			console.error("Config git operation failed (non-fatal):", gitError);
+		}
+		return Response.json(updated);
+	} catch (error) {
+		console.error("Error updating config:", error);
+		return Response.json({ error: "Failed to update configuration" }, { status: 500 });
 	}
 }
