@@ -29,7 +29,7 @@ import { getPackageName } from "../utils/app-info.ts";
 import { getVersion } from "../utils/version.ts";
 import { filterToolsByRole } from "./auth/tool-filter.ts";
 import { createMcpServer } from "./server.ts";
-import { createTakeTaskTool } from "./tools/tasks/index.ts";
+import { createMoveTaskTool, createTakeTaskTool } from "./tools/tasks/index.ts";
 import type { McpPromptHandler, McpResourceHandler, McpToolHandler } from "./types.ts";
 
 export type McpRequestHandlerOptions = {
@@ -91,9 +91,10 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 		const allTools = mcpServer.getTools();
 		const filteredTools = filterToolsByRole(allTools, userRole);
 
-		// Inject task_take for authenticated admins (write operation, not available to viewers)
+		// Inject task_take and task_move for authenticated admins (write operations, not available to viewers)
 		if (authenticatedUser && userRole !== "viewer") {
 			filteredTools.push(createTakeTaskTool(mcpServer, authenticatedUser.name));
+			filteredTools.push(createMoveTaskTool(mcpServer, authenticatedUser.name));
 		}
 		const allResources = mcpServer.getResources();
 		const allPrompts = mcpServer.getPrompts();

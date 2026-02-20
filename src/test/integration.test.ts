@@ -675,6 +675,51 @@ describe("MCP endpoint", () => {
 	});
 });
 
+describe("MCP — task_move", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	async function mcpMove(id: string, status: string): Promise<Response> {
+		return fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: {
+				...env.adminHeaders,
+				Accept: "application/json, text/event-stream",
+			},
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 1,
+				method: "tools/call",
+				params: { name: "task_move", arguments: { id, status } },
+			}),
+		});
+	}
+
+	test("task_move auto-assigns unassigned task to caller and sets status to In Progress", async () => {
+		// task-1 has no assignee; admin requests status "Done" but should be forced to "In Progress"
+		const res = await mcpMove("task-1", "Done");
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body).toContain("Admin User");
+		expect(body.toLowerCase()).toContain("in progress");
+	});
+
+	test("task_move sets requested status when caller is already the assignee", async () => {
+		// task-1 is now assigned to Admin User from previous test
+		const res = await mcpMove("task-1", "Done");
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body.toLowerCase()).toContain("done");
+	});
+});
+
 describe("REST API — config", () => {
 	let env: TestEnv;
 

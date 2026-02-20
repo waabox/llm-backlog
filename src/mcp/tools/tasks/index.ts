@@ -94,6 +94,33 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 }
 
 /**
+ * Creates a per-request task_move tool with the current user's name baked in.
+ * Automatically assigns the task to the caller when they are not already an
+ * assignee, then moves the task to "In Progress". If the caller is already an
+ * assignee, moves the task to the requested status.
+ *
+ * Used by the HTTP transport to inject authenticated user context into the tool.
+ */
+export function createMoveTaskTool(server: McpServer, currentUser: string): McpToolHandler {
+	const handlers = new TaskHandlers(server);
+	return createSimpleValidatedTool(
+		{
+			name: "task_move",
+			description: `Move a task to a specified status. If you (${currentUser}) are not the current assignee, the task will first be assigned to you and moved to "In Progress".`,
+			inputSchema: {
+				properties: {
+					id: { type: "string", description: "Task ID to move" },
+					status: { type: "string", description: "Target status" },
+				},
+				required: ["id", "status"],
+			},
+		},
+		{ properties: { id: { type: "string" }, status: { type: "string" } }, required: ["id", "status"] },
+		async (input) => handlers.moveTask({ id: input.id as string, status: input.status as string, assignee: currentUser }),
+	);
+}
+
+/**
  * Creates a per-request task_take tool with the current user's name baked in.
  * Used by the HTTP transport to inject authenticated user context into the tool.
  */

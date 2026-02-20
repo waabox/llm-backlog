@@ -423,6 +423,15 @@ export class TaskHandlers {
 		return this.editTask({ id: args.id, assignee: [args.assignee] });
 	}
 
+	async moveTask(args: { id: string; status: string; assignee: string }): Promise<CallToolResult> {
+		const task = await this.loadTaskOrThrow(args.id);
+		const currentAssignees = task.assignee ?? [];
+		if (!currentAssignees.includes(args.assignee)) {
+			return this.editTask({ id: args.id, assignee: [...currentAssignees, args.assignee], status: "In Progress" });
+		}
+		return this.editTask({ id: args.id, status: args.status });
+	}
+
 	async editTask(args: TaskEditRequest): Promise<CallToolResult> {
 		try {
 			const updateInput = buildTaskUpdateInput(args);
