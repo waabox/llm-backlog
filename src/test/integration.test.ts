@@ -674,3 +674,62 @@ describe("MCP endpoint", () => {
 		expect(res.status).toBe(401);
 	});
 });
+
+describe("REST API — config", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/config returns full config", async () => {
+		const res = await fetch(`${env.baseUrl}/api/config`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const config = await res.json();
+		expect(config.projectName).toBe("Integration Test Project");
+		expect(Array.isArray(config.labels)).toBe(true);
+		expect(Array.isArray(config.statuses)).toBe(true);
+	});
+
+	test("PUT /api/config updates labels and commits", async () => {
+		const current = await fetch(`${env.baseUrl}/api/config`, { headers: env.adminHeaders }).then((r) => r.json());
+		const logBefore = await gitLog(env.projectDir);
+
+		const updated = { ...current, labels: ["bug", "feature", "enhancement"] };
+		const res = await fetch(`${env.baseUrl}/api/config`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify(updated),
+		});
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.labels).toEqual(["bug", "feature", "enhancement"]);
+
+		// Verify config was persisted
+		const refetched = await fetch(`${env.baseUrl}/api/config`, { headers: env.adminHeaders }).then((r) => r.json());
+		expect(refetched.labels).toEqual(["bug", "feature", "enhancement"]);
+
+		// Verify a new commit was created
+		const logAfter = await gitLog(env.projectDir);
+		expect(logAfter.length).toBeGreaterThan(logBefore.length);
+		expect(logAfter[0]).toContain("update project configuration");
+	});
+
+	test("PUT /api/config updates statuses", async () => {
+		const current = await fetch(`${env.baseUrl}/api/config`, { headers: env.adminHeaders }).then((r) => r.json());
+
+		const updated = { ...current, statuses: ["Backlog", "In Progress", "Review", "Done"] };
+		const res = await fetch(`${env.baseUrl}/api/config`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify(updated),
+		});
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.statuses).toEqual(["Backlog", "In Progress", "Review", "Done"]);
+	});
+});
