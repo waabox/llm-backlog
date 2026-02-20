@@ -130,8 +130,10 @@ export async function buildRemoteTaskIndex(
 				const idRegex = buildPathIdRegex(prefix);
 
 				for (const f of files) {
-					// Extract task ID from filename using configured prefix
-					const m = f.match(idRegex);
+					// Extract task ID from filename only (not full path) to avoid matching
+					// parent folder names (e.g. task-1/SubTasks/task-1.1 - title.md)
+					const filename = f.split("/").pop() ?? f;
+					const m = filename.match(idRegex);
 					if (!m?.[1]) continue;
 
 					const id = normalizeId(m[1], prefix);
@@ -259,8 +261,10 @@ export async function buildLocalBranchTaskIndex(
 				const idRegex = buildPathIdRegex(prefix);
 
 				for (const f of files) {
-					// Extract task ID from filename using configured prefix
-					const m = f.match(idRegex);
+					// Extract task ID from filename only (not full path) to avoid matching
+					// parent folder names (e.g. task-1/SubTasks/task-1.1 - title.md)
+					const filename = f.split("/").pop() ?? f;
+					const m = filename.match(idRegex);
 					if (!m?.[1]) continue;
 
 					const id = normalizeId(m[1], prefix);
