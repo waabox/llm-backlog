@@ -26,6 +26,8 @@ interface Props {
   milestoneEntities?: Milestone[];
   archivedMilestoneEntities?: Milestone[];
   definitionOfDoneDefaults?: string[];
+  onOpenTask?: (task: Task) => void;
+  onAddSubtask?: (parentId: string) => void;
 }
 
 type Mode = "preview" | "edit" | "create";
@@ -63,6 +65,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
   milestoneEntities,
   archivedMilestoneEntities,
   definitionOfDoneDefaults,
+  onOpenTask,
+  onAddSubtask,
 }) => {
   const { theme } = useTheme();
   const isCreateMode = !task;
@@ -70,6 +74,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [mode, setMode] = useState<Mode>(isCreateMode ? "create" : "preview");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [subtasks, setSubtasks] = useState<Task[]>([]);
 
   // Title field for create mode
   const [title, setTitle] = useState(task?.title || "");
@@ -180,6 +185,13 @@ export const TaskDetailsModal: React.FC<Props> = ({
     setError(null);
     // Preload tasks for dependency picker
     apiClient.fetchTasks().then(setAvailableTasks).catch(() => setAvailableTasks([]));
+    if (task && (task.subtaskSummaries?.length ?? 0) > 0) {
+      apiClient.fetchTasks({ parent: task.id })
+        .then(setSubtasks)
+        .catch(() => setSubtasks([]));
+    } else {
+      setSubtasks([]);
+    }
   }, [task, isOpen, isCreateMode, availableStatuses, defaultDefinitionOfDone]);
 
   const handleCancelEdit = () => {
