@@ -11,6 +11,7 @@ import AssigneeInput from "./AssigneeInput";
 import DependencyInput from "./DependencyInput";
 import { formatStoredUtcDateForDisplay } from "../utils/date-display";
 import { getMilestoneLabel, resolveMilestoneInput } from "../utils/milestones";
+import { TaskAttachments } from "./TaskAttachments";
 
 interface Props {
   task?: Task; // Optional for create mode
@@ -633,6 +634,14 @@ export const TaskDetailsModal: React.FC<Props> = ({
               )}
             </div>
           </div>
+
+          {/* Attachments */}
+          {task && mode !== "create" && !isFromOtherBranch && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+              <SectionHeader title="Attachments" />
+              <TaskAttachments taskId={task.id} />
+            </div>
+          )}
 
           {/* Documentation */}
           {documentation.length > 0 && (
