@@ -11,6 +11,7 @@ import indexHtml from "../web/index.html";
 import { ConfigRepoService } from "./auth/config-repo";
 import { authenticateRequest } from "./auth/middleware";
 import { ProjectRepoService } from "./project-repo";
+import { handleDeleteAsset, handleListAssets, handleUploadAsset } from "./routes/assets.ts";
 import { handleGetMe, handleGoogleLogin } from "./routes/auth.ts";
 import {
 	handleGetConfig,
@@ -250,6 +251,21 @@ export class BacklogServer {
 						POST: this.protect(
 							async (req: Request & { params: { id: string } }) =>
 								await handleCompleteTask(req.params.id, this.core, () => this.broadcastTasksUpdated()),
+						),
+					},
+					"/api/tasks/:id/assets": {
+						GET: this.protect(
+							async (req: Request & { params: { id: string } }) => await handleListAssets(req.params.id, this.core),
+						),
+						POST: this.protect(
+							async (req: Request & { params: { id: string } }) =>
+								await handleUploadAsset(req, req.params.id, this.core),
+						),
+					},
+					"/api/tasks/:id/assets/:filename": {
+						DELETE: this.protect(
+							async (req: Request & { params: { id: string; filename: string } }) =>
+								await handleDeleteAsset(req.params.id, decodeURIComponent(req.params.filename), this.core),
 						),
 					},
 					"/api/statuses": {
