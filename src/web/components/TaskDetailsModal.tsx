@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { AcceptanceCriterion, Milestone, Task } from "../../types";
 import Modal from "./Modal";
 import { apiClient } from "../lib/api";
@@ -829,109 +830,172 @@ export const TaskDetailsModal: React.FC<Props> = ({
           {task && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
               <SectionHeader title="Title" />
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                }}
-                onBlur={() => {
-                  if (title.trim() && title !== task.title) {
-                    void handleInlineMetaUpdate({ title: title.trim() });
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  }
-                }}
-                disabled={isFromOtherBranch}
-                className={`w-full h-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
-              />
+              {mode === "preview" ? (
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words">{title}</p>
+              ) : (
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                  }}
+                  onBlur={() => {
+                    if (title.trim() && title !== task.title) {
+                      void handleInlineMetaUpdate({ title: title.trim() });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  disabled={isFromOtherBranch}
+                  className={`w-full h-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
+                />
+              )}
             </div>
           )}
 
           {/* Status */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Status" />
-            <StatusSelect current={status} onChange={(val) => handleInlineMetaUpdate({ status: val })} disabled={isFromOtherBranch} />
+            {mode === "preview" ? (
+              <span className="text-sm text-gray-900 dark:text-gray-100">{status || "—"}</span>
+            ) : (
+              <StatusSelect current={status} onChange={(val) => handleInlineMetaUpdate({ status: val })} disabled={isFromOtherBranch} />
+            )}
           </div>
 
           {/* Assignee */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Assignee" />
-            <AssigneeInput
-              value={assignee}
-              onChange={(value) => handleInlineMetaUpdate({ assignee: value })}
-              disabled={isFromOtherBranch}
-            />
+            {mode === "preview" ? (
+              assignee.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {assignee.map((a) => (
+                    <Link
+                      key={a}
+                      to={`/my-work?assignee=${encodeURIComponent(a)}`}
+                      onClick={onClose}
+                      className="text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:underline truncate"
+                    >
+                      {a}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm text-gray-900 dark:text-gray-100">—</span>
+              )
+            ) : (
+              <AssigneeInput
+                value={assignee}
+                onChange={(value) => handleInlineMetaUpdate({ assignee: value })}
+                disabled={isFromOtherBranch}
+              />
+            )}
           </div>
 
           {/* Labels */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Labels" />
-            <ChipInput
-              name="labels"
-              label=""
-              value={labels}
-              onChange={(value) => handleInlineMetaUpdate({ labels: value })}
-              placeholder="Type label and press Enter or comma"
-              disabled={isFromOtherBranch}
-            />
+            {mode === "preview" ? (
+              labels.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {labels.map((label) => (
+                    <span key={label} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm text-gray-900 dark:text-gray-100">—</span>
+              )
+            ) : (
+              <ChipInput
+                name="labels"
+                label=""
+                value={labels}
+                onChange={(value) => handleInlineMetaUpdate({ labels: value })}
+                placeholder="Type label and press Enter or comma"
+                disabled={isFromOtherBranch}
+              />
+            )}
           </div>
 
           {/* Priority */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Priority" />
-            <select
-              className={`w-full h-10 px-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
-              value={priority}
-              onChange={(e) => handleInlineMetaUpdate({ priority: e.target.value as any })}
-              disabled={isFromOtherBranch}
-            >
-              <option value="">No Priority</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
+            {mode === "preview" ? (
+              <span className="text-sm text-gray-900 dark:text-gray-100 capitalize">{priority || "—"}</span>
+            ) : (
+              <select
+                className={`w-full h-10 px-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
+                value={priority}
+                onChange={(e) => handleInlineMetaUpdate({ priority: e.target.value as any })}
+                disabled={isFromOtherBranch}
+              >
+                <option value="">No Priority</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            )}
           </div>
 
           {/* Milestone */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Milestone" />
-            <select
-              className={`w-full h-10 px-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
-              value={milestoneSelectionValue}
-				onChange={(e) => {
-					const value = e.target.value;
-					setMilestone(value);
-					handleInlineMetaUpdate({ milestone: value.trim().length > 0 ? value : null });
-				}}
-              disabled={isFromOtherBranch}
-            >
-              <option value="">No milestone</option>
-              {!hasMilestoneSelection && milestoneSelectionValue ? (
-                <option value={milestoneSelectionValue}>{resolveMilestoneLabel(milestoneSelectionValue)}</option>
-              ) : null}
-              {(milestoneEntities ?? []).map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.title}
-                </option>
-              ))}
-            </select>
+            {mode === "preview" ? (
+              <span className="text-sm text-gray-900 dark:text-gray-100">{resolveMilestoneLabel(milestone) || "—"}</span>
+            ) : (
+              <select
+                className={`w-full h-10 px-3 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 ${isFromOtherBranch ? 'opacity-60 cursor-not-allowed' : ''}`}
+                value={milestoneSelectionValue}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMilestone(value);
+                  handleInlineMetaUpdate({ milestone: value.trim().length > 0 ? value : null });
+                }}
+                disabled={isFromOtherBranch}
+              >
+                <option value="">No milestone</option>
+                {!hasMilestoneSelection && milestoneSelectionValue ? (
+                  <option value={milestoneSelectionValue}>{resolveMilestoneLabel(milestoneSelectionValue)}</option>
+                ) : null}
+                {(milestoneEntities ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Dependencies */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
             <SectionHeader title="Dependencies" />
-            <DependencyInput
-              value={dependencies}
-              onChange={(value) => handleInlineMetaUpdate({ dependencies: value })}
-              availableTasks={availableTasks}
-              currentTaskId={task?.id}
-              label=""
-              disabled={isFromOtherBranch}
-            />
+            {mode === "preview" ? (
+              dependencies.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {dependencies.map((dep) => (
+                    <span key={dep} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
+                      {dep}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm text-gray-900 dark:text-gray-100">—</span>
+              )
+            ) : (
+              <DependencyInput
+                value={dependencies}
+                onChange={(value) => handleInlineMetaUpdate({ dependencies: value })}
+                availableTasks={availableTasks}
+                currentTaskId={task?.id}
+                label=""
+                disabled={isFromOtherBranch}
+              />
+            )}
           </div>
 
           {/* Archive button at bottom of sidebar */}

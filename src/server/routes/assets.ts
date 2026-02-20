@@ -20,7 +20,6 @@ export async function handleUploadAsset(req: Request, taskId: string, core: Core
 		}
 
 		const buffer = await file.arrayBuffer();
-		console.log("[asset-upload] file.name:", JSON.stringify(file.name), "file.type:", file.type, "size:", buffer.byteLength);
 		const metadata = await core.filesystem.assets.saveAsset(taskId, file.name, buffer);
 
 		if (await core.shouldAutoCommit()) {

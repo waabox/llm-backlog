@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import type { Milestone, Task } from "../../types";
 import { useAuth } from "../contexts/AuthContext";
+import { useSearchParams } from "react-router-dom";
 import MilestoneTaskRow from "./MilestoneTaskRow";
 
 interface MyWorkPageProps {
@@ -48,6 +49,8 @@ interface TaskGroup {
 
 const MyWorkPage: React.FC<MyWorkPageProps> = ({ tasks, milestoneEntities, onEditTask }) => {
 	const { user } = useAuth();
+	const [searchParams] = useSearchParams();
+	const assigneeFilter = searchParams.get("assignee");
 	const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
 	const toggleGroup = (key: string): void => {
@@ -55,15 +58,19 @@ const MyWorkPage: React.FC<MyWorkPageProps> = ({ tasks, milestoneEntities, onEdi
 	};
 
 	const assignedTasks = useMemo((): Task[] => {
+		if (assigneeFilter) {
+			return tasks.filter((task) =>
+				(task.assignee ?? []).some((entry) => entry.includes(assigneeFilter)),
+			);
+		}
 		if (!user) return [];
-
 		return tasks.filter((task) => {
 			const entries = task.assignee ?? [];
 			const matchesEmail = entries.some((entry) => entry.includes(user.email));
 			if (matchesEmail) return true;
 			return entries.some((entry) => entry.includes(user.name));
 		});
-	}, [tasks, user]);
+	}, [tasks, user, assigneeFilter]);
 
 	const groups = useMemo((): TaskGroup[] => {
 		const milestoneMap = new Map<string, Milestone>(
@@ -108,7 +115,7 @@ const MyWorkPage: React.FC<MyWorkPageProps> = ({ tasks, milestoneEntities, onEdi
 		return result;
 	}, [assignedTasks, milestoneEntities]);
 
-	if (!user) {
+	if (!user && !assigneeFilter) {
 		return (
 			<div className="flex flex-col items-center justify-center py-24 text-center bg-gray-50 dark:bg-gray-900 min-h-full">
 				<svg
