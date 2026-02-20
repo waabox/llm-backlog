@@ -4,7 +4,7 @@ import { parseTask } from "../markdown/parser.ts";
 import { serializeTask } from "../markdown/serializer.ts";
 import type { BacklogConfig, Task, TaskListFilter } from "../types/index.ts";
 import { buildGlobPattern, extractAnyPrefix, idForFilename, normalizeId } from "../utils/prefix-config.ts";
-import { getTaskFilename, getTaskPath, normalizeTaskIdentity } from "../utils/task-path.ts";
+import { getTaskContainerDir, getTaskFilename, getTaskPath, isSubtaskId, normalizeTaskIdentity } from "../utils/task-path.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { ensureDirectoryExists, sanitizeFilename } from "./shared.ts";
 
@@ -42,7 +42,8 @@ export class TaskStore {
 		}
 		const taskId = normalizeId(task.id, prefix);
 		const filename = `${idForFilename(taskId)} - ${sanitizeFilename(task.title)}.md`;
-		const filepath = join(this.tasksDir, filename);
+		const containerDir = getTaskContainerDir(taskId, this.tasksDir);
+		const filepath = join(containerDir, filename);
 		// Normalize task ID and parentTaskId to uppercase before serialization
 		const normalizedTask = {
 			...task,
@@ -64,7 +65,7 @@ export class TaskStore {
 			// Ignore errors if no existing files found
 		}
 
-		await ensureDirectoryExists(dirname(filepath));
+		await ensureDirectoryExists(containerDir);
 		await Bun.write(filepath, content);
 		return filepath;
 	}
@@ -90,10 +91,16 @@ export class TaskStore {
 		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
 		const globPattern = buildGlobPattern(taskPrefix);
 
-		let taskFiles: string[];
+		let taskFiles: string[] = [];
 		try {
-			taskFiles = await Array.fromAsync(new Bun.Glob(globPattern).scan({ cwd: this.tasksDir, followSymlinks: true }));
-		} catch (_error) {
+			const topLevel = await Array.fromAsync(
+				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.tasksDir, followSymlinks: true }),
+			);
+			const subtasks = await Array.fromAsync(
+				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.tasksDir, followSymlinks: true }),
+			);
+			taskFiles = [...topLevel, ...subtasks];
+		} catch {
 			return [];
 		}
 
@@ -130,12 +137,16 @@ export class TaskStore {
 		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
 		const globPattern = buildGlobPattern(taskPrefix);
 
-		let taskFiles: string[];
+		let taskFiles: string[] = [];
 		try {
-			taskFiles = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: this.completedDir, followSymlinks: true }),
+			const topLevel = await Array.fromAsync(
+				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.completedDir, followSymlinks: true }),
 			);
-		} catch (_error) {
+			const subtasks = await Array.fromAsync(
+				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.completedDir, followSymlinks: true }),
+			);
+			taskFiles = [...topLevel, ...subtasks];
+		} catch {
 			return [];
 		}
 
@@ -162,12 +173,16 @@ export class TaskStore {
 		const taskPrefix = (config?.prefixes?.task ?? "task").toLowerCase();
 		const globPattern = buildGlobPattern(taskPrefix);
 
-		let taskFiles: string[];
+		let taskFiles: string[] = [];
 		try {
-			taskFiles = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: this.archiveTasksDir, followSymlinks: true }),
+			const topLevel = await Array.fromAsync(
+				new Bun.Glob(`*/${globPattern}`).scan({ cwd: this.archiveTasksDir, followSymlinks: true }),
 			);
-		} catch (_error) {
+			const subtasks = await Array.fromAsync(
+				new Bun.Glob(`*/SubTasks/${globPattern}`).scan({ cwd: this.archiveTasksDir, followSymlinks: true }),
+			);
+			taskFiles = [...topLevel, ...subtasks];
+		} catch {
 			return [];
 		}
 
@@ -190,44 +205,56 @@ export class TaskStore {
 
 	async archiveTask(taskId: string): Promise<boolean> {
 		try {
-			const core = { filesystem: { tasksDir: this.tasksDir } };
-			const sourcePath = await getTaskPath(taskId, core as TaskPathContext);
-			const taskFile = await getTaskFilename(taskId, core as TaskPathContext);
+			const prefix = extractAnyPrefix(taskId) ?? "task";
+			const normalized = normalizeId(taskId, prefix);
 
-			if (!sourcePath || !taskFile) return false;
-
-			const targetPath = join(this.archiveTasksDir, taskFile);
-
-			// Ensure target directory exists
-			await ensureDirectoryExists(dirname(targetPath));
-
-			// Use rename for proper Git move detection
-			await rename(sourcePath, targetPath);
-
+			if (isSubtaskId(normalized)) {
+				// Subtask: move just the .md file
+				const core = { filesystem: { tasksDir: this.tasksDir } };
+				const sourcePath = await getTaskPath(normalized, core as TaskPathContext);
+				const relativeFilename = await getTaskFilename(normalized, core as TaskPathContext);
+				if (!sourcePath || !relativeFilename) return false;
+				const targetPath = join(this.archiveTasksDir, relativeFilename);
+				await ensureDirectoryExists(dirname(targetPath));
+				await rename(sourcePath, targetPath);
+			} else {
+				// Top-level task: move entire folder
+				const folderName = idForFilename(normalized);
+				const sourceFolder = join(this.tasksDir, folderName);
+				const targetFolder = join(this.archiveTasksDir, folderName);
+				await ensureDirectoryExists(dirname(targetFolder));
+				await rename(sourceFolder, targetFolder);
+			}
 			return true;
-		} catch (_error) {
+		} catch {
 			return false;
 		}
 	}
 
 	async completeTask(taskId: string): Promise<boolean> {
 		try {
-			const core = { filesystem: { tasksDir: this.tasksDir } };
-			const sourcePath = await getTaskPath(taskId, core as TaskPathContext);
-			const taskFile = await getTaskFilename(taskId, core as TaskPathContext);
+			const prefix = extractAnyPrefix(taskId) ?? "task";
+			const normalized = normalizeId(taskId, prefix);
 
-			if (!sourcePath || !taskFile) return false;
-
-			const targetPath = join(this.completedDir, taskFile);
-
-			// Ensure target directory exists
-			await ensureDirectoryExists(dirname(targetPath));
-
-			// Use rename for proper Git move detection
-			await rename(sourcePath, targetPath);
-
+			if (isSubtaskId(normalized)) {
+				// Subtask: move just the .md file
+				const core = { filesystem: { tasksDir: this.tasksDir } };
+				const sourcePath = await getTaskPath(normalized, core as TaskPathContext);
+				const relativeFilename = await getTaskFilename(normalized, core as TaskPathContext);
+				if (!sourcePath || !relativeFilename) return false;
+				const targetPath = join(this.completedDir, relativeFilename);
+				await ensureDirectoryExists(dirname(targetPath));
+				await rename(sourcePath, targetPath);
+			} else {
+				// Top-level task: move entire folder
+				const folderName = idForFilename(normalized);
+				const sourceFolder = join(this.tasksDir, folderName);
+				const targetFolder = join(this.completedDir, folderName);
+				await ensureDirectoryExists(dirname(targetFolder));
+				await rename(sourceFolder, targetFolder);
+			}
 			return true;
-		} catch (_error) {
+		} catch {
 			return false;
 		}
 	}
