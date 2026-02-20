@@ -1,7 +1,7 @@
 import type { Task } from "../types/index.ts";
-import type { ChecklistItem } from "../ui/checklist.ts";
-import { transformCodePathsPlain } from "../ui/code-path.ts";
-import { formatStatusWithIcon } from "../ui/status-icon.ts";
+import type { ChecklistItem } from "./checklist.ts";
+import { transformCodePathsPlain } from "./code-path.ts";
+import { formatStatusWithIcon } from "./status-icon.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 
 export type TaskPlainTextOptions = {

@@ -1,276 +1,210 @@
-<h1 align="center">Backlog.md</h1>
-<p align="center">Markdown‑native Task Manager &amp; Kanban visualizer for any Git repository</p>
+# Backlog.md
+
+A web-based project backlog for humans and AI agents. Tasks live as plain Markdown files inside a Git repository. A web UI lets humans manage them visually; an MCP endpoint lets AI agents read, create, and update them programmatically.
 
 ---
 
-> **This project is based on [waabox/Backlog.md](https://github.com/waabox/Backlog.md).**
-> Due to a shift in focus and direction, I am rebuilding it from the ground up with new goals and architecture.
-> Once the TypeScript version reaches a stable state, the plan is to port it to **Rust**.
+## What is a backlog?
+
+A backlog is an ordered list of work that needs to be done on a project. Each item in the backlog is called a **task**. Tasks are not calendar items — they have no fixed start date. They describe *what* needs to happen and *why*, and they sit in the backlog until someone picks them up.
+
+The backlog is always changing. New tasks get added when ideas or bugs surface. Tasks get refined when more context becomes available. Tasks get closed when the work is done. The goal is to keep the list honest: every task should be clear enough that anyone — human or AI — can read it and understand exactly what is expected.
 
 ---
 
-![Backlog demo GIF using: backlog board](./.github/backlog.gif)
+## What is a task?
 
----
+A task is a Markdown file. It has a YAML frontmatter block with structured metadata and a body with freeform sections.
 
-> **Backlog.md** turns any folder with a Git repo into a **self‑contained project board**
-> powered by plain Markdown files and a zero‑config CLI.
-> Built for **spec‑driven AI development** — structure your tasks so AI agents deliver predictable results.
-
-## Features
-
-* 📝 **Markdown-native tasks** -- manage every issue as a plain `.md` file
-
-* 🤖 **AI-Ready** -- Works with Claude Code, Gemini CLI, Codex, Kiro & any other MCP or CLI compatible AI assistants
-
-* 📊 **Instant terminal Kanban** -- `backlog board` paints a live board in your shell
-
-* 🌐 **Modern web interface** -- `backlog browser` launches a sleek web UI for visual task management
-
-* 🔍 **Powerful search** -- fuzzy search across tasks, docs & decisions with `backlog search`
-
-* 📋 **Rich query commands** -- view, list, filter, or archive tasks with ease
-* ✅ **Definition of Done defaults** -- add a reusable checklist to every new task
-
-* 📤 **Board export** -- `backlog board export` creates shareable markdown reports
-
-* 🔒 **100 % private & offline** -- backlog lives entirely inside your repo and you can manage everything locally
-
-* 💻 **Cross-platform** -- runs on macOS, Linux, and Windows
-
-* 🆓 **MIT-licensed & open-source** -- free for personal or commercial use
-
-
----
-
-## <img src="./.github/5-minute-tour-256.png" alt="Getting started" width="28" height="28" align="center"> Getting started
-
-```bash
-# Install
-bun i -g backlog.md
-# or: npm i -g backlog.md
-# or: brew install backlog-md
-
-# Initialize in any git repo
-backlog init "My Awesome Project"
+```
+backlog/tasks/back-42 - Add payment webhook handler.md
 ```
 
-The init wizard will ask how you want to connect AI tools:
-- **MCP connector** (recommended) — auto-configures Claude Code, Codex, Gemini CLI, Kiro or Cursor and adds workflow instructions for your agents.
-- **CLI commands** — creates instruction files (CLAUDE.md, AGENTS.md, etc.) so agents use Backlog via CLI.
-- **Skip** — no AI setup; use Backlog.md purely as a task manager.
+### Metadata (frontmatter)
 
-All data is saved under the `backlog` folder as human-readable Markdown files (e.g. `task-10 - Add core search functionality.md`).
+| Field | Purpose |
+|---|---|
+| `id` | Unique identifier, e.g. `BACK-42` |
+| `title` | One-line summary of the work |
+| `status` | Current state: `To Do`, `In Progress`, `Review`, `Done`, `Blocked` |
+| `priority` | `high`, `medium`, or `low` |
+| `assignee` | Who is doing this, e.g. `@alice` |
+| `milestone` | Which milestone this task belongs to |
+| `labels` | Free tags for filtering |
+| `dependencies` | IDs of tasks that must finish first |
+| `references` | URLs or file paths relevant to the task |
 
----
+### Body sections
 
-### Working with AI agents
+| Section | For whom | Purpose |
+|---|---|---|
+| **Description** | Human + AI | What needs to be done and why. Be specific. The better this is written, the better the AI output. |
+| **Acceptance Criteria** | Human + AI | Concrete, checkable conditions that define "done". Each item is a checkbox. |
+| **Definition of Done** | Human + AI | Project-wide quality checklist applied to every task (tests pass, docs updated, etc.). |
+| **Implementation Plan** | AI | Written by the AI *before* coding. Describes the approach. A human reviews and approves it before the AI proceeds. |
+| **Implementation Notes** | AI | Running notes the AI adds while working. Observations, decisions made, dead ends. |
+| **Final Summary** | AI | Written by the AI when the task is complete. A PR-style summary of what changed and why. |
 
-This is the recommended flow for Claude Code, Codex, Gemini CLI, Kiro and similar tools — following the **spec‑driven AI development** approach.
-After running `backlog init` and choosing the MCP or CLI integration, work in this loop:
+### A well-written task
 
-**Step 1 — Describe your idea.** Tell the agent what you want to build and ask it to split the work into small tasks with clear descriptions and acceptance criteria.
+The Description and Acceptance Criteria are the most important parts. They are the contract between the person who wants the work done and the person (or AI) doing it.
 
-**🤖 Ask your AI Agent:**
-> I want to add a search feature to the web view that searches tasks, docs, and decisions. Please decompose this into small Backlog.md tasks.
+- **Description**: explain the problem and the desired outcome. Give enough context that someone who has never touched this codebase could understand what is being asked.
+- **Acceptance Criteria**: list every condition that must be true before the task can be closed. Make each item verifiable — not "works correctly" but "clicking Save persists the record to the database and shows a success toast."
 
-> [!NOTE]
-> **Review checkpoint #1** — read the task descriptions and acceptance criteria.
-
-**Step 2 — One task at a time.** Work on a single task per agent session, one PR per task. Good task splitting means each session can work independently without conflicts. Make sure each task is small enough to complete in a single conversation. You want to avoid running out of context window.
-
-**Step 3 — Plan before coding.** Ask the agent to research and write an implementation plan in the task. Do this right before implementation so the plan reflects the current state of the codebase.
-
-**🤖 Ask your AI Agent:**
-> Work on BACK-10 only. Research the codebase and write an implementation plan in the task. Wait for my approval before coding.
-
-> [!NOTE]
-> **Review checkpoint #2** — read the plan. Does the approach make sense? Approve it or ask the agent to revise.
-
-**Step 4 — Implement and verify.** Let the agent implement the task.
-
-> [!NOTE]
-> **Review checkpoint #3** — review the code, run tests, check linting, and verify the results match your expectations.
-
-If the output is not good enough: clear the plan/notes/final summary, refine the task description and acceptance criteria, and run the task again in a fresh session.
+A task that is vague produces vague results. A task that is precise produces precise results.
 
 ---
 
-### Working without AI agents
-
-Use Backlog.md as a standalone task manager from the terminal or browser.
+## Running the server
 
 ```bash
-# Create and refine tasks
-backlog task create "Render markdown as kanban"
-backlog task edit BACK-1 -d "Detailed context" --ac "Clear acceptance criteria"
-
-# Track work
-backlog task list -s "To Do"
-backlog search "kanban"
-backlog board
-
-# Work visually in the browser
-backlog browser
+# Copy and edit the environment file
+cp run.sh.example run.sh   # set BACKLOG_PROJECT_REPO, AUTH_CONFIG_REPO, GOOGLE_CLIENT_ID
+./run.sh
 ```
 
-You can switch between AI-assisted and manual workflows at any time — both operate on the same Markdown task files. It is recommended to modify tasks via Backlog.md commands (CLI/MCP/Web) rather than editing task files manually, so field types and metadata stay consistent.
-
-**Learn more:** [CLI reference](CLI-INSTRUCTIONS.md) | [Advanced configuration](ADVANCED-CONFIG.md)
-
----
-
-## <img src="./.github/web-interface-256.png" alt="Web Interface" width="28" height="28" align="center"> Web Interface
-
-Launch a modern, responsive web interface for visual task management:
+Or directly:
 
 ```bash
-# Start the web server (opens browser automatically)
-backlog browser
-
-# Custom port
-backlog browser --port 8080
-
-# Don't open browser automatically
-backlog browser --no-open
+PORT=6420 OPEN_BROWSER=false bun src/main.ts
 ```
 
-**Features:**
-- Interactive Kanban board with drag-and-drop
-- Task creation and editing with rich forms
-- Interactive acceptance criteria editor with checklists
-- Real-time updates across all views
-- Responsive design for desktop and mobile
-- Task archiving with confirmation dialogs
-- Seamless CLI integration - all changes sync with markdown files
-
-![Web Interface Screenshot](./.github/web.jpeg)
+The server exposes:
+- **Web UI** at `http://localhost:6420`
+- **MCP endpoint** at `http://localhost:6420/mcp`
 
 ---
 
-## 🔧 MCP Integration (Model Context Protocol)
+## Web UI
 
-The easiest way to connect Backlog.md to AI coding assistants like Claude Code, Codex, Gemini CLI and Kiro is via the MCP protocol.
-You can run `backlog init` (even if you already initialized Backlog.md) to set up MCP integration automatically, or follow the manual steps below.
+The web interface is the primary way for humans to interact with the backlog.
 
-### Client guides
+- **Board** — Kanban view, drag tasks between columns.
+- **All Tasks** — table view with filtering by status, priority, and label.
+- **Milestones** — group tasks by milestone and track progress.
+- **Decisions** — log architectural decisions as ADRs.
+- **Documents** — store reference documentation alongside the tasks.
 
-<details>
-  <summary><strong>Claude Code</strong></summary>
+Authentication uses Google OAuth. Configure `GOOGLE_CLIENT_ID` and `AUTH_CONFIG_REPO` in `run.sh`.
 
-  ```bash
-  claude mcp add backlog --scope user -- backlog mcp start
-  ```
+---
 
-</details>
+## For AI agents (MCP)
 
-<details>
-  <summary><strong>Codex</strong></summary>
+The MCP endpoint at `/mcp` implements the [Model Context Protocol](https://modelcontextprotocol.io). AI agents connect to it to read and manage the backlog without touching the filesystem directly.
 
-  ```bash
-  codex mcp add backlog backlog mcp start
-  ```
+### Connection
 
-</details>
-
-<details>
-  <summary><strong>Gemini CLI</strong></summary>
-
-  ```bash
-  gemini mcp add backlog -s user backlog mcp start
-  ```
-
-</details>
-
-<details>
-  <summary><strong>Kiro</strong></summary>
-
-  ```bash
-  kiro-cli mcp add --scope global --name backlog --command backlog --args mcp,start
-  ```
-
-</details>
-
-Use the shared `backlog` server name everywhere – the MCP server auto-detects whether the current directory is initialized and falls back to `backlog://init-required` when needed.
-
-### Manual config
+Add this to your agent's MCP config:
 
 ```json
 {
   "mcpServers": {
     "backlog": {
-      "command": "backlog",
-      "args": ["mcp", "start"]
+      "url": "http://localhost:6420/mcp",
+      "headers": { "Authorization": "Bearer <api-key>" }
     }
   }
 }
 ```
 
-> [!IMPORTANT]
-> When adding the MCP server manually, you should add some extra instructions in your CLAUDE.md/AGENTS.md files to inform the agent about Backlog.md.
-> This step is not required when using `backlog init` as it adds these instructions automatically.
-> Backlog.md's instructions for agents are available at [`/src/guidelines/mcp/agent-nudge.md`](/src/guidelines/mcp/agent-nudge.md).
+API keys are defined in the `users.md` file inside the `AUTH_CONFIG_REPO` repository.
 
+### Available tools
 
-Once connected, agents can read the Backlog.md workflow instructions via the resource `backlog://docs/task-workflow`.
-Use `/mcp` command in your AI tool (Claude Code, Codex, Kiro) to verify if the connection is working.
+| Tool | What it does |
+|---|---|
+| `task_list` | List tasks, optionally filtered by status, assignee, labels, or a search query |
+| `task_search` | Full-text fuzzy search across task titles and descriptions |
+| `task_view` | Read the full content of a single task by ID |
+| `task_create` | Create a new task with title, description, acceptance criteria, and other fields |
+| `task_edit` | Update any field of an existing task, including appending to plan/notes/final summary |
+| `task_complete` | Move a task to the completed folder |
+| `task_archive` | Archive a task |
 
----
+### Recommended agent workflow
 
-## <img src="./.github/cli-reference-256.png" alt="CLI Reference" width="28" height="28" align="center"> CLI reference
+This is the intended loop for AI-assisted development. It is designed to keep humans in control of what gets built and how.
 
-Full command reference — task management, search, board, docs, decisions, and more: **[CLI-INSTRUCTIONS.md](CLI-INSTRUCTIONS.md)**
+**1. Decompose**
 
-Quick examples: `backlog task create`, `backlog task list`, `backlog task edit`, `backlog search`, `backlog board`, `backlog browser`.
+Ask the agent to break a feature or goal into small, independent tasks. Each task should be completable in a single conversation without running out of context.
 
-Full help: `backlog --help`
+**2. Refine**
 
----
+Review the tasks the agent created. Read the descriptions and acceptance criteria. Edit them until they are precise enough that you would be satisfied if the agent delivered exactly what is written — nothing more, nothing less.
 
-## <img src="./.github/configuration-256.png" alt="Configuration" width="28" height="28" align="center"> Configuration
+**3. Plan**
 
-Backlog.md merges the following layers (highest → lowest):
+Assign one task to the agent. Before writing any code, ask it to research the codebase and write an implementation plan into the task (`planSet` field). Review the plan. If the approach looks wrong, reject it and ask for a revision. Approve only when the approach makes sense.
 
-1. CLI flags
-2. `backlog/config.yml` (per‑project)
-3. `~/backlog/user` (per‑user)
-4. Built‑ins
+**4. Implement**
 
-### Interactive wizard (`backlog config`)
+Once the plan is approved, let the agent implement the task. It should append notes as it works (`notesAppend`) and write a final summary when done (`finalSummary`).
 
-Run `backlog config` with no arguments to launch the full interactive wizard. This is the same experience triggered from `backlog init` when you opt into advanced settings, and it walks through the complete configuration surface:
-- Cross-branch accuracy: `checkActiveBranches`, `remoteOperations`, and `activeBranchDays`.
-- Git workflow: `autoCommit` and `bypassGitHooks`.
-- ID formatting: enable or size `zeroPaddedIds`.
-- Editor integration: pick a `defaultEditor` with availability checks.
-- Web UI defaults: choose `defaultPort` and whether `autoOpenBrowser` should run.
+**5. Review**
 
-Skipping the wizard (answering "No" during init) applies the safe defaults that ship with Backlog.md:
-- `checkActiveBranches=true`, `remoteOperations=true`, `activeBranchDays=30`.
-- `autoCommit=false`, `bypassGitHooks=false`.
-- `zeroPaddedIds` disabled.
-- `defaultEditor` unset (falls back to your environment).
-- `defaultPort=6420`, `autoOpenBrowser=true`.
+Read the code, run the tests. If the output does not match expectations, clear the plan and notes, refine the acceptance criteria, and start the task again in a fresh session.
 
-Whenever you revisit `backlog init` or rerun `backlog config`, the wizard pre-populates prompts with your current values so you can adjust only what changed.
+### task_edit field reference
 
-### Definition of Done defaults
+When editing a task, the following operations are available:
 
-Set project-wide DoD items in the Web UI (Settings → Definition of Done Defaults) or edit `backlog/config.yml` directly:
+```
+title, description, status, priority, milestone, labels, assignee, dependencies
 
-```yaml
-definition_of_done:
-  - Tests pass
-  - Documentation updated
-  - No regressions introduced
+# Plan
+planSet          — replace the implementation plan
+planAppend       — append lines to the plan
+planClear        — delete the plan
+
+# Notes
+notesSet         — replace implementation notes
+notesAppend      — append lines to notes
+notesClear       — delete notes
+
+# Final summary
+finalSummary     — set the completion summary (write when task is done)
+finalSummaryAppend
+finalSummaryClear
+
+# Acceptance criteria
+acceptanceCriteriaSet    — replace all items
+acceptanceCriteriaAdd    — add new items
+acceptanceCriteriaCheck  — mark items checked by index
+acceptanceCriteriaUncheck
+
+# Definition of done
+definitionOfDoneAdd
+definitionOfDoneCheck
+definitionOfDoneUncheck
+definitionOfDoneRemove
+
+# References and docs
+references, addReferences, removeReferences
+documentation, addDocumentation, removeDocumentation
 ```
 
-These items are added to every new task by default. You can add more on create with `--dod`, or disable defaults per task with `--no-dod-defaults`. Array values like `definition_of_done` must be edited in the config file or via the Web UI.
+---
 
-For the full configuration reference (all options, commands, and detailed notes), see **[ADVANCED-CONFIG.md](ADVANCED-CONFIG.md)**.
+## Storage
+
+All data is plain text. Tasks, milestones, decisions, and documents are Markdown files committed to Git. The server auto-commits mutations when `auto_commit: true` is set in `backlog/config.yml`.
+
+```
+backlog/
+  tasks/          ← active tasks
+  tasks/archive/  ← archived tasks
+  tasks/done/     ← completed tasks
+  milestones/     ← milestone definitions
+  decisions/      ← architectural decision records
+  documents/      ← reference documentation
+  config.yml      ← project configuration
+```
 
 ---
 
-### License
+## License
 
-Backlog.md is released under the **MIT License** – do anything, just give credit. See [LICENSE](LICENSE).
+MIT
