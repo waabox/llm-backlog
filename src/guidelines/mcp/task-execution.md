@@ -28,6 +28,7 @@
 
 ### Working with Subtasks (Planning)
 
+- **If the task has subtasks listed, ask the user which subtask to tackle before doing anything else.** Do not assume an order or start planning the parent task — present the subtask list and wait for explicit direction.
 - If working on a parent task with subtasks, create a high-level plan for the parent that outlines the overall approach
 - Each subtask should have its own detailed implementation plan when you work on it
 - Ensure subtask plans are consistent with the parent task's overall strategy
