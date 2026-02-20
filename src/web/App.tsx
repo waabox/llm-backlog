@@ -52,6 +52,7 @@ function TaskRoute({
 function AppRoutes() {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [pendingParentTaskId, setPendingParentTaskId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<string[]>([]);
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   const [projectName, setProjectName] = useState<string>('');
@@ -254,6 +255,17 @@ function AppRoutes() {
     setShowModal(true);
   };
 
+  const handleOpenTask = useCallback((task: Task) => {
+    setEditingTask(task);
+    setShowModal(true);
+  }, []);
+
+  const handleAddSubtask = useCallback((parentId: string) => {
+    setPendingParentTaskId(parentId);
+    setEditingTask(null);
+    setShowModal(true);
+  }, []);
+
   const handleEditTask = (task: Task) => {
     navigate(`/tasks/${task.id}`);
   };
@@ -261,6 +273,7 @@ function AppRoutes() {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTask(null);
+    setPendingParentTaskId(null);
     // Capture whether there's history to go back to before any navigation fires.
     const hadHistory = location.key !== 'default';
     // Defer the back-navigation so that any synchronous Link navigation inside
@@ -312,7 +325,9 @@ function AppRoutes() {
     if (editingTask) {
       await apiClient.updateTask(editingTask.id, taskData);
     } else {
-      const createdTask = await apiClient.createTask(taskData as Omit<Task, "id" | "createdDate">);
+      const createdTask = await apiClient.createTask(
+        (pendingParentTaskId ? { ...taskData, parentTaskId: pendingParentTaskId } : taskData) as Omit<Task, "id" | "createdDate">
+      );
 
       // Show task creation confirmation
       setTaskConfirmation({ task: createdTask });
@@ -503,6 +518,8 @@ function AppRoutes() {
         milestoneEntities={milestoneEntities}
         archivedMilestoneEntities={archivedMilestones}
         definitionOfDoneDefaults={config?.definitionOfDone ?? []}
+        onOpenTask={handleOpenTask}
+        onAddSubtask={handleAddSubtask}
       />
 
       {/* Task Creation Confirmation Toast */}
