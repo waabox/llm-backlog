@@ -1,4 +1,4 @@
-# Backlog.md
+# LLM Backlog
 
 A web-based project backlog for humans and AI agents. Tasks live as plain Markdown files inside a Git repository. A web UI lets humans manage them visually; an MCP endpoint lets AI agents read, create, and update them programmatically.
 
