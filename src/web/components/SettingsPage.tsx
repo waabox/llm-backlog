@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiClient } from "../lib/api.ts";
 import type { BacklogConfig } from "../../types/index.ts";
 
@@ -73,6 +73,7 @@ export function SettingsPage() {
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);
+	const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const [labels, setLabels] = useState<string[]>([]);
 	const [statuses, setStatuses] = useState<string[]>([]);
@@ -99,6 +100,12 @@ export function SettingsPage() {
 		});
 	}, []);
 
+	useEffect(() => {
+		return () => {
+			if (successTimerRef.current) clearTimeout(successTimerRef.current);
+		};
+	}, []);
+
 	const handleSave = async () => {
 		if (!config) return;
 		setSaving(true);
@@ -119,7 +126,8 @@ export function SettingsPage() {
 			});
 			setConfig(updated);
 			setSuccess(true);
-			setTimeout(() => setSuccess(false), 3000);
+			if (successTimerRef.current) clearTimeout(successTimerRef.current);
+			successTimerRef.current = setTimeout(() => setSuccess(false), 3000);
 		} catch {
 			setError("Failed to save settings. Please try again.");
 		} finally {
@@ -242,11 +250,14 @@ export function SettingsPage() {
 					<>
 						<div className="flex items-center justify-between">
 							<div>
-								<div className={labelClass}>Auto Commit</div>
+								<span className={labelClass} aria-hidden="true">Auto Commit</span>
 								<p className="text-xs text-gray-500 dark:text-gray-400">Automatically commit changes to git</p>
 							</div>
 							<button
 								type="button"
+								role="switch"
+								aria-checked={autoCommit}
+								aria-label="Auto Commit"
 								onClick={() => setAutoCommit(!autoCommit)}
 								className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
 									autoCommit ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
@@ -261,11 +272,14 @@ export function SettingsPage() {
 						</div>
 						<div className="flex items-center justify-between">
 							<div>
-								<div className={labelClass}>Auto Open Browser</div>
+								<span className={labelClass} aria-hidden="true">Auto Open Browser</span>
 								<p className="text-xs text-gray-500 dark:text-gray-400">Open browser automatically on server start</p>
 							</div>
 							<button
 								type="button"
+								role="switch"
+								aria-checked={autoOpenBrowser}
+								aria-label="Auto Open Browser"
 								onClick={() => setAutoOpenBrowser(!autoOpenBrowser)}
 								className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
 									autoOpenBrowser ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
