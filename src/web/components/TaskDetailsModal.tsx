@@ -454,6 +454,15 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const displayId = task?.id ?? "";
   const documentation = task?.documentation ?? [];
 
+  const getSubtaskStatusColor = (status: string): string => {
+    switch (status.toLowerCase()) {
+      case "to do":       return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
+      case "in progress": return "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200";
+      case "done":        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200";
+      default:            return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -573,6 +582,48 @@ export const TaskDetailsModal: React.FC<Props> = ({
               </div>
             )}
           </div>
+
+          {/* Subtasks */}
+          {!isCreateMode && !isFromOtherBranch && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+              <SectionHeader
+                title="Subtasks"
+                right={
+                  <button
+                    onClick={() => task && onAddSubtask?.(task.id)}
+                    className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add
+                  </button>
+                }
+              />
+              {subtasks.length > 0 ? (
+                <ul
+                  className="space-y-1 overflow-y-auto"
+                  style={{ maxHeight: "11rem" }}
+                >
+                  {subtasks.map((sub) => (
+                    <li
+                      key={sub.id}
+                      onClick={() => onOpenTask?.(sub)}
+                      className="flex items-center gap-3 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <code className="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">{sub.id}</code>
+                      <span className="flex-1 text-sm text-gray-900 dark:text-gray-100 truncate">{sub.title}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${getSubtaskStatusColor(sub.status ?? "")}`}>
+                        {sub.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks</p>
+              )}
+            </div>
+          )}
 
           {/* References */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
