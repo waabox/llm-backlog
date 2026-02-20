@@ -145,15 +145,16 @@ function idsMatchLoosely(inputId: string, filename: string, prefix: string = DEF
  * Returns true if a task ID is a subtask (dot notation like TASK-1.1).
  */
 export function isSubtaskId(taskId: string): boolean {
-	const body = extractTaskBody(taskId);
-	return body !== null && body.includes(".");
+	const prefix = extractAnyPrefix(taskId) ?? DEFAULT_TASK_PREFIX;
+	const body = extractTaskBody(taskId, prefix);
+	return body !== null && body !== "" && body.includes(".");
 }
 
 /**
  * Extracts the top-level parent ID from a subtask ID.
  * TASK-1.1 → TASK-1, TASK-1.2.3 → TASK-1
  */
-export function getTopLevelParentId(subtaskId: string, prefix: string = DEFAULT_TASK_PREFIX): string {
+export function getTopLevelParentId(subtaskId: string, prefix: string): string {
 	const body = extractTaskBody(subtaskId, prefix);
 	if (!body || !body.includes(".")) return subtaskId;
 	const parentBody = body.split(".")[0];
@@ -174,39 +175,40 @@ export function getTaskContainerDir(taskId: string, baseDir: string): string {
 	return join(baseDir, idForFilename(normalizeTaskId(taskId, prefix)));
 }
 
-/**
- * Get the file path for a task by ID.
- * For numeric-only IDs, automatically detects the prefix from existing files.
- */
-export async function getTaskPath(taskId: string, core?: Core | TaskPathContext): Promise<string | null> {
-	const coreInstance = core || new Core(process.cwd());
+interface ResolvedTaskFile {
+	containerDir: string;
+	file: string;
+}
+
+async function resolveTaskFile(
+	taskId: string,
+	tasksDir: string,
+): Promise<ResolvedTaskFile | null> {
 	const detectedPrefix = extractAnyPrefix(taskId);
 
 	if (detectedPrefix) {
-		const containerDir = getTaskContainerDir(taskId, coreInstance.filesystem.tasksDir);
+		const containerDir = getTaskContainerDir(taskId, tasksDir);
 		const globPattern = buildGlobPattern(detectedPrefix);
 		try {
 			const files = await Array.fromAsync(
 				new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }),
 			);
-			const taskFile = findMatchingFile(files, taskId, detectedPrefix);
-			if (taskFile) {
-				return join(containerDir, taskFile);
-			}
+			const file = findMatchingFile(files, taskId, detectedPrefix);
+			if (file) return { containerDir, file };
 		} catch {
-			// fall through
+			// Directory not found or scan failed
 		}
 		return null;
 	}
 
-	// For numeric-only IDs: scan all task folders looking for a match
+	// Numeric-only ID fallback: scan subdirectories
 	try {
 		const allDirs = await Array.fromAsync(
-			new Bun.Glob("*/").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
+			new Bun.Glob("*/").scan({ cwd: tasksDir, followSymlinks: true }),
 		);
 		const numericPart = taskId.trim();
 		for (const dir of allDirs) {
-			const dirPath = join(coreInstance.filesystem.tasksDir, dir);
+			const dirPath = join(tasksDir, dir);
 			const filesInDir = await Array.fromAsync(
 				new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }),
 			);
@@ -215,7 +217,7 @@ export async function getTaskPath(taskId: string, core?: Core | TaskPathContext)
 				if (filePrefix) {
 					const fileBody = extractTaskBodyFromFilename(file, filePrefix);
 					if (fileBody && numericPartsEqual(numericPart, fileBody)) {
-						return join(dirPath, file);
+						return { containerDir: dirPath, file };
 					}
 				}
 			}
@@ -224,6 +226,17 @@ export async function getTaskPath(taskId: string, core?: Core | TaskPathContext)
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Get the file path for a task by ID.
+ * For numeric-only IDs, automatically detects the prefix from existing files.
+ */
+export async function getTaskPath(taskId: string, core?: Core | TaskPathContext): Promise<string | null> {
+	const coreInstance = core || new Core(process.cwd());
+	const resolved = await resolveTaskFile(taskId, coreInstance.filesystem.tasksDir);
+	if (!resolved) return null;
+	return join(resolved.containerDir, resolved.file);
 }
 
 /**
@@ -370,50 +383,10 @@ export async function getDraftPath(draftId: string, core: Core): Promise<string 
  */
 export async function getTaskFilename(taskId: string, core?: Core | TaskPathContext): Promise<string | null> {
 	const coreInstance = core || new Core(process.cwd());
-	const detectedPrefix = extractAnyPrefix(taskId);
-
-	if (detectedPrefix) {
-		const containerDir = getTaskContainerDir(taskId, coreInstance.filesystem.tasksDir);
-		const globPattern = buildGlobPattern(detectedPrefix);
-		try {
-			const files = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }),
-			);
-			const taskFile = findMatchingFile(files, taskId, detectedPrefix);
-			if (!taskFile) return null;
-			// Return relative path from tasksDir, e.g. "task-1/task-1 - Title.md"
-			const relativeContainer = relative(coreInstance.filesystem.tasksDir, containerDir);
-			return join(relativeContainer, taskFile);
-		} catch {
-			return null;
-		}
-	}
-
-	// Numeric-only fallback: scan all task folders
-	try {
-		const allDirs = await Array.fromAsync(
-			new Bun.Glob("*/").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
-		);
-		const numericPart = taskId.trim();
-		for (const dir of allDirs) {
-			const dirPath = join(coreInstance.filesystem.tasksDir, dir);
-			const filesInDir = await Array.fromAsync(
-				new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }),
-			);
-			for (const file of filesInDir) {
-				const filePrefix = extractAnyPrefix(file);
-				if (filePrefix) {
-					const fileBody = extractTaskBodyFromFilename(file, filePrefix);
-					if (fileBody && numericPartsEqual(numericPart, fileBody)) {
-						return join(dir, file); // relative from tasksDir
-					}
-				}
-			}
-		}
-		return null;
-	} catch {
-		return null;
-	}
+	const resolved = await resolveTaskFile(taskId, coreInstance.filesystem.tasksDir);
+	if (!resolved) return null;
+	const relativeContainer = relative(coreInstance.filesystem.tasksDir, resolved.containerDir);
+	return join(relativeContainer, resolved.file);
 }
 
 /**
