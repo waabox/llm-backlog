@@ -82,6 +82,7 @@ The web interface is the primary way for humans to interact with the backlog.
 
 - **Board** — Kanban view, drag tasks between columns.
 - **All Tasks** — table view with filtering by status, priority, and label.
+- **My Work** — tasks assigned to the logged-in user, grouped by milestone.
 - **Milestones** — group tasks by milestone and track progress.
 - **Decisions** — log architectural decisions as ADRs.
 - **Documents** — store reference documentation alongside the tasks.
