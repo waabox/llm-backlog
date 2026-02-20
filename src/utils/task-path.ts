@@ -68,7 +68,7 @@ export function normalizeTaskIdentity(task: Task): Task {
  * extractTaskBody("task-5.2.1") // => "5.2.1"
  * extractTaskBody("JIRA-456", "JIRA") // => "456"
  */
-function extractTaskBody(value: string, prefix: string = DEFAULT_TASK_PREFIX): string | null {
+export function extractTaskBody(value: string, prefix: string = DEFAULT_TASK_PREFIX): string | null {
 	const trimmed = value.trim();
 	if (trimmed === "") return "";
 	// Build a pattern that optionally matches the prefix
@@ -142,52 +142,84 @@ function idsMatchLoosely(inputId: string, filename: string, prefix: string = DEF
 }
 
 /**
+ * Returns true if a task ID is a subtask (dot notation like TASK-1.1).
+ */
+export function isSubtaskId(taskId: string): boolean {
+	const body = extractTaskBody(taskId);
+	return body !== null && body.includes(".");
+}
+
+/**
+ * Extracts the top-level parent ID from a subtask ID.
+ * TASK-1.1 → TASK-1, TASK-1.2.3 → TASK-1
+ */
+export function getTopLevelParentId(subtaskId: string, prefix: string = DEFAULT_TASK_PREFIX): string {
+	const body = extractTaskBody(subtaskId, prefix);
+	if (!body || !body.includes(".")) return subtaskId;
+	const parentBody = body.split(".")[0];
+	return normalizeTaskId(`${prefix}-${parentBody}`, prefix);
+}
+
+/**
+ * Returns the directory that contains the task's .md file within a given base dir.
+ * For TASK-1: returns {baseDir}/task-1/
+ * For TASK-1.1: returns {baseDir}/task-1/SubTasks/
+ */
+export function getTaskContainerDir(taskId: string, baseDir: string): string {
+	const prefix = extractAnyPrefix(taskId) ?? DEFAULT_TASK_PREFIX;
+	if (isSubtaskId(taskId)) {
+		const parentId = getTopLevelParentId(taskId, prefix);
+		return join(baseDir, idForFilename(parentId), "SubTasks");
+	}
+	return join(baseDir, idForFilename(normalizeTaskId(taskId, prefix)));
+}
+
+/**
  * Get the file path for a task by ID.
  * For numeric-only IDs, automatically detects the prefix from existing files.
  */
 export async function getTaskPath(taskId: string, core?: Core | TaskPathContext): Promise<string | null> {
 	const coreInstance = core || new Core(process.cwd());
-
-	// Extract prefix from the taskId
 	const detectedPrefix = extractAnyPrefix(taskId);
 
-	// If prefix is detected, search only for that prefix
 	if (detectedPrefix) {
+		const containerDir = getTaskContainerDir(taskId, coreInstance.filesystem.tasksDir);
 		const globPattern = buildGlobPattern(detectedPrefix);
 		try {
 			const files = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
+				new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }),
 			);
 			const taskFile = findMatchingFile(files, taskId, detectedPrefix);
 			if (taskFile) {
-				return join(coreInstance.filesystem.tasksDir, taskFile);
+				return join(containerDir, taskFile);
 			}
 		} catch {
-			// Fall through to return null
+			// fall through
 		}
 		return null;
 	}
 
-	// For numeric-only IDs, scan all .md files and find one matching the number
+	// For numeric-only IDs: scan all task folders looking for a match
 	try {
-		const allFiles = await Array.fromAsync(
-			new Bun.Glob("*.md").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
+		const allDirs = await Array.fromAsync(
+			new Bun.Glob("*/").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
 		);
-
-		// Look for a file matching this numeric ID with any prefix
-		// Pattern: <prefix>-<number> - <title>.md (e.g., "back-358 - Title.md")
 		const numericPart = taskId.trim();
-		for (const file of allFiles) {
-			// Extract prefix from filename and check if numeric part matches
-			const filePrefix = extractAnyPrefix(file);
-			if (filePrefix) {
-				const fileBody = extractTaskBodyFromFilename(file, filePrefix);
-				if (fileBody && numericPartsEqual(numericPart, fileBody)) {
-					return join(coreInstance.filesystem.tasksDir, file);
+		for (const dir of allDirs) {
+			const dirPath = join(coreInstance.filesystem.tasksDir, dir);
+			const filesInDir = await Array.fromAsync(
+				new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }),
+			);
+			for (const file of filesInDir) {
+				const filePrefix = extractAnyPrefix(file);
+				if (filePrefix) {
+					const fileBody = extractTaskBodyFromFilename(file, filePrefix);
+					if (fileBody && numericPartsEqual(numericPart, fileBody)) {
+						return join(dirPath, file);
+					}
 				}
 			}
 		}
-
 		return null;
 	} catch {
 		return null;
@@ -332,45 +364,52 @@ export async function getDraftPath(draftId: string, core: Core): Promise<string 
 }
 
 /**
- * Get the filename (without directory) for a task by ID.
+ * Get the filename relative to tasksDir for a task by ID.
+ * Returns a path like "task-1/task-1 - Title.md" (not just the bare filename).
  * For numeric-only IDs, automatically detects the prefix from existing files.
  */
 export async function getTaskFilename(taskId: string, core?: Core | TaskPathContext): Promise<string | null> {
 	const coreInstance = core || new Core(process.cwd());
-
-	// Extract prefix from the taskId
 	const detectedPrefix = extractAnyPrefix(taskId);
 
-	// If prefix is detected, search only for that prefix
 	if (detectedPrefix) {
+		const containerDir = getTaskContainerDir(taskId, coreInstance.filesystem.tasksDir);
 		const globPattern = buildGlobPattern(detectedPrefix);
 		try {
 			const files = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
+				new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }),
 			);
-			return findMatchingFile(files, taskId, detectedPrefix) ?? null;
+			const taskFile = findMatchingFile(files, taskId, detectedPrefix);
+			if (!taskFile) return null;
+			// Return relative path from tasksDir, e.g. "task-1/task-1 - Title.md"
+			const relativeContainer = containerDir.slice(coreInstance.filesystem.tasksDir.length + 1);
+			return join(relativeContainer, taskFile);
 		} catch {
 			return null;
 		}
 	}
 
-	// For numeric-only IDs, scan all .md files and find one matching the number
+	// Numeric-only fallback: scan all task folders
 	try {
-		const allFiles = await Array.fromAsync(
-			new Bun.Glob("*.md").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
+		const allDirs = await Array.fromAsync(
+			new Bun.Glob("*/").scan({ cwd: coreInstance.filesystem.tasksDir, followSymlinks: true }),
 		);
-
 		const numericPart = taskId.trim();
-		for (const file of allFiles) {
-			const filePrefix = extractAnyPrefix(file);
-			if (filePrefix) {
-				const fileBody = extractTaskBodyFromFilename(file, filePrefix);
-				if (fileBody && numericPartsEqual(numericPart, fileBody)) {
-					return file;
+		for (const dir of allDirs) {
+			const dirPath = join(coreInstance.filesystem.tasksDir, dir);
+			const filesInDir = await Array.fromAsync(
+				new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }),
+			);
+			for (const file of filesInDir) {
+				const filePrefix = extractAnyPrefix(file);
+				if (filePrefix) {
+					const fileBody = extractTaskBodyFromFilename(file, filePrefix);
+					if (fileBody && numericPartsEqual(numericPart, fileBody)) {
+						return join(dir, file); // relative from tasksDir
+					}
 				}
 			}
 		}
-
 		return null;
 	} catch {
 		return null;
