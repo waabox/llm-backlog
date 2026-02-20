@@ -6,6 +6,7 @@ import DocumentationDetail from './components/DocumentationDetail';
 import DecisionDetail from './components/DecisionDetail';
 import TaskList from './components/TaskList';
 import Statistics from './components/Statistics';
+import { SettingsPage } from './components/SettingsPage';
 import MilestonesPage from './components/MilestonesPage';
 import MyWorkPage from './components/MyWorkPage';
 import TeamPage from './components/TeamPage';
@@ -521,6 +522,7 @@ function AppRoutes() {
           <Route path="decisions/:id" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
           <Route path="decisions/:id/:title" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
           <Route path="statistics" element={<Statistics tasks={tasks} isLoading={isLoading} onEditTask={handleEditTask} projectName={projectName} />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
 
