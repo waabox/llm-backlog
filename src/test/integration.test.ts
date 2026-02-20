@@ -203,8 +203,10 @@ async function buildProjectRepo(dir: string): Promise<void> {
 	}
 
 	await writeFile(join(backlog, "config.yml"), CONFIG_YML);
-	await writeFile(join(paths.tasks, "task-1 - Initial Task.md"), TASK_1_MD);
-	await writeFile(join(paths.tasks, "task-2 - Second Task.md"), TASK_2_MD);
+	await mkdir(join(paths.tasks, "task-1"), { recursive: true });
+	await writeFile(join(paths.tasks, "task-1", "task-1 - Initial Task.md"), TASK_1_MD);
+	await mkdir(join(paths.tasks, "task-2"), { recursive: true });
+	await writeFile(join(paths.tasks, "task-2", "task-2 - Second Task.md"), TASK_2_MD);
 	await writeFile(join(paths.milestones, "m-0 - release-1.0.md"), MILESTONE_MD);
 	await writeFile(join(paths.decisions, "decision-1 - Use TypeScript.md"), DECISION_MD);
 	await writeFile(join(paths.docs, "doc-001 - Getting Started Guide.md"), DOC_MD);
