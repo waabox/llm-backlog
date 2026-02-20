@@ -237,6 +237,9 @@ async function startTestEnv(): Promise<TestEnv> {
 	await buildProjectRepo(projectDir);
 
 	process.env.AUTH_CONFIG_REPO = configDir;
+	// Ensure GOOGLE_CLIENT_ID is unset so auth mode is "MCP API key only",
+	// which leaves REST endpoints unguarded by JWT and lets API keys through.
+	delete process.env.GOOGLE_CLIENT_ID;
 
 	const server = new BacklogServer(projectDir);
 	const port = randomPort();
@@ -496,6 +499,87 @@ describe("REST API — config & status", () => {
 		expect(Array.isArray(statuses)).toBe(true);
 		expect(statuses).toContain("To Do");
 		expect(statuses).toContain("Done");
+	});
+});
+
+describe("REST API — asset endpoints", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("GET /api/tasks/:id/assets returns empty array when no assets exist", async () => {
+		const res = await fetch(`${env.baseUrl}/api/tasks/task-1/assets`, {
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+		});
+		expect(res.status).toBe(200);
+		const assets = await res.json();
+		expect(Array.isArray(assets)).toBe(true);
+		expect(assets.length).toBe(0);
+	});
+
+	test("POST /api/tasks/:id/assets uploads a file and it appears in list with correct metadata", async () => {
+		const form = new FormData();
+		form.append("file", new File(["hello world"], "test.txt", { type: "text/plain" }));
+
+		const uploadRes = await fetch(`${env.baseUrl}/api/tasks/task-1/assets`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+			body: form,
+		});
+		expect(uploadRes.status).toBe(201);
+		const metadata = await uploadRes.json();
+
+		expect(metadata.filename).toMatch(/^\d+-test\.txt$/);
+		expect(metadata.originalName).toBe("test.txt");
+		expect(metadata.mimeType).toBe("text/plain");
+		expect(metadata.size).toBe(11);
+		expect(metadata.url).toMatch(/^\/assets\/000\/task-1\//);
+		expect(metadata.isImage).toBe(false);
+
+		const listRes = await fetch(`${env.baseUrl}/api/tasks/task-1/assets`, {
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+		});
+		expect(listRes.status).toBe(200);
+		const assets = await listRes.json();
+		expect(Array.isArray(assets)).toBe(true);
+		const uploaded = assets.find((a: { filename: string }) => a.filename === metadata.filename);
+		expect(uploaded).toBeTruthy();
+		expect(uploaded.originalName).toBe("test.txt");
+	});
+
+	test("DELETE /api/tasks/:id/assets/:filename removes the file from the list", async () => {
+		const form = new FormData();
+		form.append("file", new File(["delete me"], "todelete.txt", { type: "text/plain" }));
+
+		const uploadRes = await fetch(`${env.baseUrl}/api/tasks/task-2/assets`, {
+			method: "POST",
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+			body: form,
+		});
+		expect(uploadRes.status).toBe(201);
+		const metadata = await uploadRes.json();
+
+		const deleteRes = await fetch(`${env.baseUrl}/api/tasks/task-2/assets/${encodeURIComponent(metadata.filename)}`, {
+			method: "DELETE",
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+		});
+		expect(deleteRes.status).toBe(200);
+		const deleteBody = await deleteRes.json();
+		expect(deleteBody.success).toBe(true);
+
+		const listRes = await fetch(`${env.baseUrl}/api/tasks/task-2/assets`, {
+			headers: { Authorization: `Bearer ${ADMIN_API_KEY}` },
+		});
+		expect(listRes.status).toBe(200);
+		const assets = await listRes.json();
+		const found = assets.find((a: { filename: string }) => a.filename === metadata.filename);
+		expect(found).toBeUndefined();
 	});
 });
 
