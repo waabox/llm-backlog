@@ -30,7 +30,7 @@ export function extractCommandStructure(program: Command): CommandInfo {
 		aliases: program.aliases(),
 		arguments: extractArguments(program),
 		subcommands: program.commands.map((cmd) => extractCommandInfo(cmd)),
-		options: program.options.map((opt) => extractOptionInfo(opt)),
+		options: extractOptions(program),
 	};
 }
 
@@ -43,8 +43,17 @@ function extractCommandInfo(command: Command): CommandInfo {
 		aliases: command.aliases(),
 		arguments: extractArguments(command),
 		subcommands: command.commands.map((cmd) => extractCommandInfo(cmd)),
-		options: command.options.map((opt) => extractOptionInfo(opt)),
+		options: extractOptions(command),
 	};
+}
+
+/**
+ * Extract options from a command
+ */
+function extractOptions(command: Command): OptionInfo[] {
+	type CommandWithOptions = Command & { options?: Option[] };
+	const opts = (command as CommandWithOptions).options || [];
+	return opts.map((opt: Option) => extractOptionInfo(opt));
 }
 
 /**
