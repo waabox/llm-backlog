@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import BoardPage from './components/BoardPage';
@@ -71,6 +71,9 @@ function AppRoutes() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Board and task list only show top-level tasks (no subtasks)
+  const topLevelTasks = useMemo(() => tasks.filter(t => !t.parentTaskId), [tasks]);
 
   const { isOnline, setMessageHandler } = useHealthCheckContext();
   const previousOnlineRef = useRef<boolean | null>(null);
@@ -418,7 +421,7 @@ function AppRoutes() {
               <BoardPage
                 onEditTask={handleEditTask}
                 onNewTask={handleNewTask}
-              tasks={tasks}
+              tasks={topLevelTasks}
               onRefreshData={refreshData}
               statuses={statuses}
               milestones={milestones}
@@ -434,7 +437,7 @@ function AppRoutes() {
 	                <TaskList
 	                  onEditTask={handleEditTask}
 	                  onNewTask={handleNewTask}
-	                  tasks={tasks}
+	                  tasks={topLevelTasks}
 	                  availableStatuses={statuses}
 	                  availableLabels={availableLabels}
 	                  availableMilestones={milestones}
