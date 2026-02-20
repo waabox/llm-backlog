@@ -103,14 +103,14 @@ Add this to your agent's MCP config:
 {
   "mcpServers": {
     "backlog": {
-      "url": "http://localhost:6420/mcp",
-      "headers": { "Authorization": "Bearer <api-key>" }
+      "type": "http",
+      "url": "http://localhost:6420/mcp?token=<your-api-key>"
     }
   }
 }
 ```
 
-API keys are defined in the `users.md` file inside the `AUTH_CONFIG_REPO` repository.
+The token is passed as a query parameter since some MCP clients (e.g. Claude Code) do not support custom headers in HTTP server configuration. API keys are defined in the `users.md` file inside the `AUTH_CONFIG_REPO` repository.
 
 ### Available tools
 
