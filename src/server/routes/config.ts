@@ -21,7 +21,6 @@ export async function handleGetConfig(core: Core): Promise<Response> {
 	}
 }
 
-
 export async function handleGetVersion(): Promise<Response> {
 	try {
 		const version = await getVersion();

@@ -312,7 +312,6 @@ export class ApiClient {
 		return response.json();
 	}
 
-
 	async fetchDocs(): Promise<Document[]> {
 		const response = await fetch(`${API_BASE}/docs`, {
 			headers: { ...this.authHeaders() },

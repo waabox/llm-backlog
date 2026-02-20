@@ -136,6 +136,11 @@ const Icons = {
 			<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
 		</svg>
 	),
+	Team: () => (
+		<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+		</svg>
+	),
 	Statistics: () => (
 		<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -543,6 +548,21 @@ const SideNavigation = memo(function SideNavigation({
 							<span className="ml-3 text-sm font-medium">My Work</span>
 						</NavLink>
 
+						{/* Team Navigation */}
+						<NavLink
+							to="/team"
+							className={({ isActive }) =>
+								`flex items-center px-3 py-2 rounded-lg transition-colors duration-200 ${
+									isActive
+										? 'bg-blue-50 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 font-medium'
+										: 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+								}`
+							}
+						>
+							<Icons.Team />
+							<span className="ml-3 text-sm font-medium">Team</span>
+						</NavLink>
+
 						{/* Milestones Navigation */}
 						<NavLink
 							to="/milestones"
@@ -728,6 +748,22 @@ const SideNavigation = memo(function SideNavigation({
 						>
 							<div className="w-6 h-6 flex items-center justify-center">
 								<Icons.List />
+							</div>
+						</NavLink>
+						<NavLink
+							to="/team"
+							data-tooltip-id="sidebar-tooltip"
+							data-tooltip-content="Team"
+							className={({ isActive }) =>
+								`flex items-center justify-center p-3 rounded-md transition-colors duration-200 ${
+									isActive
+										? 'bg-blue-50 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400'
+										: 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+								}`
+							}
+						>
+							<div className="w-6 h-6 flex items-center justify-center">
+								<Icons.Team />
 							</div>
 						</NavLink>
 						{/* Milestones Navigation */}

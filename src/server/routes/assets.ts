@@ -37,7 +37,7 @@ export async function handleUploadAsset(req: Request, taskId: string, core: Core
 
 export async function handleDeleteAsset(taskId: string, filename: string, core: Core): Promise<Response> {
 	try {
-		const filePath = core.filesystem.assets.getAssetPath(taskId, filename);
+		const _filePath = core.filesystem.assets.getAssetPath(taskId, filename);
 		await core.filesystem.assets.deleteAsset(taskId, filename);
 
 		if (await core.shouldAutoCommit()) {

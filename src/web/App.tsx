@@ -8,6 +8,7 @@ import TaskList from './components/TaskList';
 import Statistics from './components/Statistics';
 import MilestonesPage from './components/MilestonesPage';
 import MyWorkPage from './components/MyWorkPage';
+import TeamPage from './components/TeamPage';
 import TaskDetailsModal from './components/TaskDetailsModal';
 import InitializationScreen from './components/InitializationScreen';
 import { SuccessToast } from './components/SuccessToast';
@@ -267,7 +268,7 @@ function AppRoutes() {
     // away from the task URL, we skip navigate(-1) entirely — otherwise it would
     // fire asynchronously via history.go(-1) and undo the Link's navigation.
     setTimeout(() => {
-      if (!window.location.pathname.match(/^\/tasks\/.+/)) return;
+      if (!window.location.pathname.match(/^\/(tasks|team)\/.+/)) return;
       if (hadHistory) {
         navigate(-1);
       } else {
@@ -431,6 +432,26 @@ function AppRoutes() {
                 tasks={tasks}
                 milestoneEntities={milestoneEntities}
                 onEditTask={handleEditTask}
+              />
+            }
+          />
+          <Route
+            path="team"
+            element={
+              <TeamPage
+                tasks={tasks}
+                milestoneEntities={milestoneEntities}
+                onEditTask={handleEditTask}
+              />
+            }
+          />
+          <Route
+            path="team/:taskId"
+            element={
+              <TaskRoute
+                tasks={tasks}
+                isLoading={isLoading}
+                onOpen={handleOpenTaskFromRoute}
               />
             }
           />

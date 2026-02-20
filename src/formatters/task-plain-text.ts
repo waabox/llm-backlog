@@ -1,8 +1,8 @@
 import type { Task } from "../types/index.ts";
+import { sortByTaskId } from "../utils/task-sorting.ts";
 import type { ChecklistItem } from "./checklist.ts";
 import { transformCodePathsPlain } from "./code-path.ts";
 import { formatStatusWithIcon } from "./status-icon.ts";
-import { sortByTaskId } from "../utils/task-sorting.ts";
 
 export type TaskPlainTextOptions = {
 	filePathOverride?: string;
