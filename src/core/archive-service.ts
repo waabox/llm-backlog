@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { DEFAULT_DIRECTORIES } from "../constants/index.ts";
 import type { Milestone, Task } from "../types/index.ts";
 import { normalizeId } from "../utils/prefix-config.ts";
-import { getTaskFilename, getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
+import { getTaskFilename, getTaskPath, isSubtaskId, normalizeTaskId } from "../utils/task-path.ts";
 import type { Core } from "./backlog.ts";
 import { sanitizeArchivedTaskLinks } from "./task-mutation.ts";
 
@@ -44,14 +44,20 @@ export async function archiveTask(core: Core, taskId: string, autoCommit?: boole
 	}
 
 	if (await core.shouldAutoCommit(autoCommit)) {
-		// Stage the file move for proper Git tracking
-		const repoRoot = await core.git.stageFileMove(fromPath, toPath);
-		for (const sanitizedTask of sanitizedTasks) {
-			if (sanitizedTask.filePath) {
-				await core.git.addFile(sanitizedTask.filePath);
+		if (isSubtaskId(normalizedTaskId)) {
+			// Single file move — stage precisely
+			const repoRoot = await core.git.stageFileMove(fromPath, toPath);
+			for (const sanitizedTask of sanitizedTasks) {
+				if (sanitizedTask.filePath) {
+					await core.git.addFile(sanitizedTask.filePath);
+				}
 			}
+			await core.git.commitChanges(`backlog: Archive task ${normalizedTaskId}`, repoRoot);
+		} else {
+			// Folder move — stage the entire backlog directory
+			const repoRoot = await core.git.stageBacklogDirectory(DEFAULT_DIRECTORIES.BACKLOG);
+			await core.git.commitChanges(`backlog: Archive task ${normalizedTaskId}`, repoRoot);
 		}
-		await core.git.commitChanges(`backlog: Archive task ${normalizedTaskId}`, repoRoot);
 	}
 
 	return true;
@@ -162,9 +168,13 @@ export async function completeTask(core: Core, taskId: string, autoCommit?: bool
 	const success = await core.fs.completeTask(taskId);
 
 	if (success && (await core.shouldAutoCommit(autoCommit))) {
-		// Stage the file move for proper Git tracking
-		const repoRoot = await core.git.stageFileMove(fromPath, toPath);
-		await core.git.commitChanges(`backlog: Complete task ${normalizeTaskId(taskId)}`, repoRoot);
+		if (isSubtaskId(normalizeTaskId(taskId))) {
+			const repoRoot = await core.git.stageFileMove(fromPath, toPath);
+			await core.git.commitChanges(`backlog: Complete task ${normalizeTaskId(taskId)}`, repoRoot);
+		} else {
+			const repoRoot = await core.git.stageBacklogDirectory(DEFAULT_DIRECTORIES.BACKLOG);
+			await core.git.commitChanges(`backlog: Complete task ${normalizeTaskId(taskId)}`, repoRoot);
+		}
 	}
 
 	return success;
