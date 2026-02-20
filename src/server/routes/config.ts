@@ -21,39 +21,6 @@ export async function handleGetConfig(core: Core): Promise<Response> {
 	}
 }
 
-export async function handleUpdateConfig(
-	req: Request,
-	core: Core,
-	broadcast: () => void,
-	onProjectNameChanged: (name: string) => void,
-): Promise<Response> {
-	try {
-		const updatedConfig = await req.json();
-
-		// Validate configuration
-		if (!updatedConfig.projectName?.trim()) {
-			return Response.json({ error: "Project name is required" }, { status: 400 });
-		}
-
-		if (updatedConfig.defaultPort && (updatedConfig.defaultPort < 1 || updatedConfig.defaultPort > 65535)) {
-			return Response.json({ error: "Port must be between 1 and 65535" }, { status: 400 });
-		}
-
-		// Save configuration
-		await core.filesystem.saveConfig(updatedConfig);
-
-		// Notify caller if project name changed
-		onProjectNameChanged(updatedConfig.projectName);
-
-		// Notify connected clients so that they refresh configuration-dependent data (e.g., statuses)
-		broadcast();
-
-		return Response.json(updatedConfig);
-	} catch (error) {
-		console.error("Error updating config:", error);
-		return Response.json({ error: "Failed to update configuration" }, { status: 500 });
-	}
-}
 
 export async function handleGetVersion(): Promise<Response> {
 	try {

@@ -312,20 +312,6 @@ export class ApiClient {
 		return response.json();
 	}
 
-	async updateConfig(config: BacklogConfig): Promise<BacklogConfig> {
-		const response = await fetch(`${API_BASE}/config`, {
-			method: "PUT",
-			headers: {
-				"Content-Type": "application/json",
-				...this.authHeaders(),
-			},
-			body: JSON.stringify(config),
-		});
-		if (!response.ok) {
-			throw new Error("Failed to update config");
-		}
-		return response.json();
-	}
 
 	async fetchDocs(): Promise<Document[]> {
 		const response = await fetch(`${API_BASE}/docs`, {

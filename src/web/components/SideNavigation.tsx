@@ -813,45 +813,13 @@ const SideNavigation = memo(function SideNavigation({
 					</div>
 				)}
 			</nav>
-			
-			{/* Settings Button - Bottom Left */}
-			<div className={`border-t border-gray-200 dark:border-gray-700 ${isCollapsed ? 'px-2 py-2' : 'px-4 py-4'}`}>
-				{!isCollapsed ? (
-					<NavLink
-						to="/settings"
-						className={({ isActive }) =>
-							`flex items-center px-3 py-2 rounded-lg transition-colors duration-200 ${
-								isActive
-									? 'bg-blue-50 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 font-medium'
-									: 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
-							}`
-						}
-					>
-						<Icons.DocumentSettings />
-						<span className="ml-3 text-sm font-medium">Settings</span>
-						{version && (
-							<span className="ml-auto text-xs text-gray-500 dark:text-gray-400">Backlog.md - v{version}</span>
-						)}
-					</NavLink>
-				) : (
-					<NavLink
-						to="/settings"
-						data-tooltip-id="sidebar-tooltip"
-						data-tooltip-content="Settings"
-						className={({ isActive }) =>
-							`flex items-center justify-center p-3 rounded-md transition-colors duration-200 ${
-								isActive
-									? 'bg-stone-50 dark:bg-stone-900/30 text-stone-700 dark:text-stone-400'
-									: 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
-							}`
-						}
-					>
-						<div className="w-6 h-6 flex items-center justify-center">
-							<Icons.DocumentSettings />
-						</div>
-					</NavLink>
-				)}
-			</div>
+
+			{/* Version - Bottom Left */}
+			{!isCollapsed && version && (
+				<div className="border-t border-gray-200 dark:border-gray-700 px-4 py-4">
+					<span className="text-xs text-gray-500 dark:text-gray-400">Backlog.md - v{version}</span>
+				</div>
+			)}
 			
 			<Tooltip id="sidebar-tooltip" place="right" />
 			</div>

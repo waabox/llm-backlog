@@ -18,7 +18,6 @@ import {
 	handleGetStatus,
 	handleGetStatuses,
 	handleGetVersion,
-	handleUpdateConfig,
 } from "./routes/config.ts";
 import {
 	handleCreateDecision,
@@ -258,17 +257,6 @@ export class BacklogServer {
 					},
 					"/api/config": {
 						GET: this.protect(async () => await handleGetConfig(this.core)),
-						PUT: this.protect(
-							async (req: Request) =>
-								await handleUpdateConfig(
-									req,
-									this.core,
-									() => this.broadcastTasksUpdated(),
-									(name) => {
-										this.projectName = name;
-									},
-								),
-						),
 					},
 					"/api/docs": {
 						GET: this.protect(async () => await handleListDocs(this.core)),
