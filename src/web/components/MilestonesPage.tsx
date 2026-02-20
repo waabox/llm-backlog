@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
 import { apiClient } from "../lib/api";
 import { buildMilestoneBuckets, collectArchivedMilestoneKeys } from "../utils/milestones";
 import { type Milestone, type MilestoneBucket, type Task } from "../../types";
@@ -24,6 +24,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	onEditTask,
 	onRefreshData,
 }) => {
+	const { milestoneId } = useParams<{ milestoneId?: string }>();
 	const { user } = useAuth();
 	const isViewer = user?.role === "viewer";
 	const [newMilestone, setNewMilestone] = useState("");
@@ -32,6 +33,13 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	const [isSaving, setIsSaving] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [expandedBuckets, setExpandedBuckets] = useState<Record<string, boolean>>({});
+
+	// Auto-expand the matching milestone bucket when navigating to a deep link
+	useEffect(() => {
+		if (milestoneId) {
+			setExpandedBuckets((prev) => ({ ...prev, [milestoneId]: true }));
+		}
+	}, [milestoneId]);
 	const [draggedTask, setDraggedTask] = useState<Task | null>(null);
 	const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 	const [showAllUnassigned, setShowAllUnassigned] = useState(false);
@@ -288,7 +296,16 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 					{/* Header row */}
 					<div className="flex items-center justify-between gap-4">
 						<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-							{bucket.label}
+							{bucket.milestone ? (
+								<Link
+									to={`/milestones/${bucket.milestone}`}
+									className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+								>
+									{bucket.label}
+								</Link>
+							) : (
+								bucket.label
+							)}
 						</h3>
 						{isEmpty ? (
 							<span className="text-sm text-gray-400 dark:text-gray-500">

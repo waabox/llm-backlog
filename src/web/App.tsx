@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import BoardPage from './components/BoardPage';
 import DocumentationDetail from './components/DocumentationDetail';
@@ -30,7 +30,25 @@ import LoginPage from './components/LoginPage';
 import { getWebVersion } from './utils/version';
 import { buildMilestoneAliasMap, canonicalizeMilestoneValue, collectArchivedMilestoneKeys, collectMilestoneIds, milestoneKey } from './utils/milestones';
 
-function App() {
+function TaskRoute({
+  tasks,
+  isLoading,
+  onOpen,
+}: {
+  tasks: Task[];
+  isLoading: boolean;
+  onOpen: (task: Task) => void;
+}) {
+  const { taskId } = useParams<{ taskId: string }>();
+  useEffect(() => {
+    if (isLoading) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) onOpen(task);
+  }, [taskId, tasks, isLoading, onOpen]);
+  return null;
+}
+
+function AppRoutes() {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [statuses, setStatuses] = useState<string[]>([]);
@@ -42,19 +60,22 @@ function App() {
   const [archivedMilestones, setArchivedMilestones] = useState<Milestone[]>([]);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [taskConfirmation, setTaskConfirmation] = useState<{task: Task} | null>(null);
-  
+
   // Initialization state
   const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
-  
+
   // Centralized data state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [docs, setDocs] = useState<Document[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const { isOnline, setMessageHandler } = useHealthCheckContext();
   const previousOnlineRef = useRef<boolean | null>(null);
   const hasBeenRunningRef = useRef(false);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Set version data attribute on body
   React.useEffect(() => {
@@ -222,7 +243,7 @@ function App() {
       }, 4000);
       return () => clearTimeout(timer);
     }
-    
+
     // Update the ref for next time
     previousOnlineRef.current = isOnline;
   }, [isOnline]);
@@ -233,14 +254,32 @@ function App() {
   };
 
   const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    setShowModal(true);
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTask(null);
+    // Capture whether there's history to go back to before any navigation fires.
+    const hadHistory = location.key !== 'default';
+    // Defer the back-navigation so that any synchronous Link navigation inside
+    // the modal (e.g. assignee links) fires first. If the Link already navigated
+    // away from the task URL, we skip navigate(-1) entirely — otherwise it would
+    // fire asynchronously via history.go(-1) and undo the Link's navigation.
+    setTimeout(() => {
+      if (!window.location.pathname.match(/^\/tasks\/.+/)) return;
+      if (hadHistory) {
+        navigate(-1);
+      } else {
+        navigate('/tasks');
+      }
+    }, 0);
   };
+
+  const handleOpenTaskFromRoute = useCallback((task: Task) => {
+    setEditingTask(task);
+    setShowModal(true);
+  }, []);
 
   const refreshData = useCallback(async () => {
     await loadAllData();
@@ -301,80 +340,67 @@ function App() {
   // Auth gate - show login if auth is enabled but user not authenticated
   if (authLoading) {
     return (
-      <ThemeProvider>
-        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-        </div>
-      </ThemeProvider>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
     );
   }
 
   if (isAuthEnabled && !user && clientId) {
-    return (
-      <ThemeProvider>
-        <LoginPage clientId={clientId} />
-      </ThemeProvider>
-    );
+    return <LoginPage clientId={clientId} />;
   }
 
   // Show loading state while checking initialization
   if (isInitialized === null) {
     return (
-      <ThemeProvider>
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-          <div className="text-lg text-gray-600 dark:text-gray-300">Loading...</div>
-        </div>
-      </ThemeProvider>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="text-lg text-gray-600 dark:text-gray-300">Loading...</div>
+      </div>
     );
   }
 
   // Show initialization screen if not initialized
   if (isInitialized === false) {
-    return (
-      <ThemeProvider>
-        <InitializationScreen onInitialized={handleInitialized} />
-      </ThemeProvider>
-    );
+    return <InitializationScreen onInitialized={handleInitialized} />;
   }
 
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-            <Route
-            path="/"
+    <>
+      <Routes>
+          <Route
+          path="/"
+          element={
+            <Layout
+              projectName={projectName}
+              showSuccessToast={showSuccessToast}
+              onDismissToast={() => setShowSuccessToast(false)}
+              tasks={tasks}
+              docs={docs}
+              decisions={decisions}
+              isLoading={isLoading}
+              onRefreshData={refreshData}
+            />
+          }
+        >
+          <Route
+            index
             element={
-              <Layout
-                projectName={projectName}
-                showSuccessToast={showSuccessToast}
-                onDismissToast={() => setShowSuccessToast(false)}
-                tasks={tasks}
-                docs={docs}
-                decisions={decisions}
-                isLoading={isLoading}
-                onRefreshData={refreshData}
-              />
-            }
-          >
-            <Route
-              index
-              element={
-                <BoardPage
-                  onEditTask={handleEditTask}
-                  onNewTask={handleNewTask}
-                tasks={tasks}
-                onRefreshData={refreshData}
-                statuses={statuses}
-                milestones={milestones}
-                milestoneEntities={milestoneEntities}
-                archivedMilestones={archivedMilestones}
-                isLoading={isLoading}
-              />
-            }
-          />
-            <Route
-              path="tasks"
-              element={
+              <BoardPage
+                onEditTask={handleEditTask}
+                onNewTask={handleNewTask}
+              tasks={tasks}
+              onRefreshData={refreshData}
+              statuses={statuses}
+              milestones={milestones}
+              milestoneEntities={milestoneEntities}
+              archivedMilestones={archivedMilestones}
+              isLoading={isLoading}
+            />
+          }
+        />
+          <Route
+            path="tasks"
+            element={
 	                <TaskList
 	                  onEditTask={handleEditTask}
 	                  onNewTask={handleNewTask}
@@ -388,19 +414,42 @@ function App() {
 	                />
 	              }
 	            />
-            <Route
-              path="my-work"
-              element={
-                <MyWorkPage
-                  tasks={tasks}
-                  milestoneEntities={milestoneEntities}
-                  onEditTask={handleEditTask}
-                />
-              }
+          <Route
+            path="tasks/:taskId"
+            element={
+              <TaskRoute
+                tasks={tasks}
+                isLoading={isLoading}
+                onOpen={handleOpenTaskFromRoute}
+              />
+            }
+          />
+          <Route
+            path="my-work"
+            element={
+              <MyWorkPage
+                tasks={tasks}
+                milestoneEntities={milestoneEntities}
+                onEditTask={handleEditTask}
+              />
+            }
+          />
+          <Route
+            path="milestones"
+            element={
+            <MilestonesPage
+              tasks={tasks}
+              statuses={statuses}
+              milestoneEntities={milestoneEntities}
+              archivedMilestones={archivedMilestones}
+              onEditTask={handleEditTask}
+              onRefreshData={refreshData}
             />
-            <Route
-              path="milestones"
-              element={
+          }
+        />
+          <Route
+            path="milestones/:milestoneId"
+            element={
               <MilestonesPage
                 tasks={tasks}
                 statuses={statuses}
@@ -411,45 +460,52 @@ function App() {
               />
             }
           />
-            <Route path="documentation" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
-            <Route path="documentation/:id" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
-            <Route path="documentation/:id/:title" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
-            <Route path="decisions" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
-            <Route path="decisions/:id" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
-            <Route path="decisions/:id/:title" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
-            <Route path="statistics" element={<Statistics tasks={tasks} isLoading={isLoading} onEditTask={handleEditTask} projectName={projectName} />} />
-          </Route>
-        </Routes>
+          <Route path="documentation" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
+          <Route path="documentation/:id" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
+          <Route path="documentation/:id/:title" element={<DocumentationDetail docs={docs} onRefreshData={refreshData} />} />
+          <Route path="decisions" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
+          <Route path="decisions/:id" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
+          <Route path="decisions/:id/:title" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} />} />
+          <Route path="statistics" element={<Statistics tasks={tasks} isLoading={isLoading} onEditTask={handleEditTask} projectName={projectName} />} />
+        </Route>
+      </Routes>
 
-        <TaskDetailsModal
-          task={editingTask || undefined}
-          isOpen={showModal}
-          onClose={handleCloseModal}
-          onSaved={refreshData}
-          onSubmit={handleSubmitTask}
-          onArchive={editingTask ? () => handleArchiveTask(editingTask.id) : undefined}
-          availableStatuses={statuses}
-          availableMilestones={milestones}
-          milestoneEntities={milestoneEntities}
-          archivedMilestoneEntities={archivedMilestones}
-          definitionOfDoneDefaults={config?.definitionOfDone ?? []}
+      <TaskDetailsModal
+        task={editingTask || undefined}
+        isOpen={showModal}
+        onClose={handleCloseModal}
+        onSaved={refreshData}
+        onSubmit={handleSubmitTask}
+        onArchive={editingTask ? () => handleArchiveTask(editingTask.id) : undefined}
+        availableStatuses={statuses}
+        availableMilestones={milestones}
+        milestoneEntities={milestoneEntities}
+        archivedMilestoneEntities={archivedMilestones}
+        definitionOfDoneDefaults={config?.definitionOfDone ?? []}
+      />
+
+      {/* Task Creation Confirmation Toast */}
+      {taskConfirmation && (
+        <SuccessToast
+          message={`Task "${taskConfirmation.task.title}" created successfully! (${taskConfirmation.task.id.replace('task-', '')})`}
+          onDismiss={() => setTaskConfirmation(null)}
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
         />
+      )}
+    </>
+  );
+}
 
-        {/* Task Creation Confirmation Toast */}
-        {taskConfirmation && (
-          <SuccessToast
-            message={`Task "${taskConfirmation.task.title}" created successfully! (${taskConfirmation.task.id.replace('task-', '')})`}
-            onDismiss={() => setTaskConfirmation(null)}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
-          />
-        )}
+export default function App() {
+  return (
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppRoutes />
       </BrowserRouter>
     </ThemeProvider>
   );
 }
-
-export default App;

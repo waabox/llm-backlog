@@ -214,7 +214,9 @@ export class BacklogServer {
 				routes: {
 					"/": indexHtml,
 					"/tasks": indexHtml,
+					"/tasks/*": indexHtml,
 					"/milestones": indexHtml,
+					"/milestones/*": indexHtml,
 					"/drafts": indexHtml,
 					"/documentation": indexHtml,
 					"/documentation/*": indexHtml,
