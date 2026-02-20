@@ -71,7 +71,9 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 		// Auth check
 		let userRole: "admin" | "viewer" | undefined;
 		if (authEnabled) {
-			const token = extractBearerToken(req.headers.get("Authorization"));
+			const url = new URL(req.url);
+			const token =
+				extractBearerToken(req.headers.get("Authorization")) ?? url.searchParams.get("token");
 			if (!token || !findUserByApiKey) {
 				return Response.json({ error: "Unauthorized" }, { status: 401 });
 			}
