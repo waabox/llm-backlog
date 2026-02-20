@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { Core } from "../core/backlog.ts";
 import type { Task } from "../types/index.ts";
 import {
@@ -382,7 +382,7 @@ export async function getTaskFilename(taskId: string, core?: Core | TaskPathCont
 			const taskFile = findMatchingFile(files, taskId, detectedPrefix);
 			if (!taskFile) return null;
 			// Return relative path from tasksDir, e.g. "task-1/task-1 - Title.md"
-			const relativeContainer = containerDir.slice(coreInstance.filesystem.tasksDir.length + 1);
+			const relativeContainer = relative(coreInstance.filesystem.tasksDir, containerDir);
 			return join(relativeContainer, taskFile);
 		} catch {
 			return null;
