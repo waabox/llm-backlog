@@ -1092,3 +1092,104 @@ describe("milestone cascade to subtasks", () => {
 		expect(subtaskAfter.milestone).toBe(m2.id);
 	});
 });
+
+describe("inactive milestone task filtering", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	async function mcpCall(body: unknown): Promise<Response> {
+		return fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: {
+				...env.adminHeaders,
+				Accept: "application/json, text/event-stream",
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(body),
+		});
+	}
+
+	test("task_list hides tasks belonging to an inactive milestone", async () => {
+		// Create a task with the existing milestone m-0 (Release 1.0, active by default)
+		const createRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 1,
+			method: "tools/call",
+			params: {
+				name: "task_create",
+				arguments: { title: "Task in inactive milestone", milestone: "m-0" },
+			},
+		});
+		expect(createRes.status).toBe(200);
+
+		// Verify the task appears in task_list while milestone is active
+		const listBeforeRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 2,
+			method: "tools/call",
+			params: { name: "task_list", arguments: {} },
+		});
+		expect(listBeforeRes.status).toBe(200);
+		const listBeforeText = await listBeforeRes.text();
+		expect(listBeforeText).toContain("Task in inactive milestone");
+
+		// Deactivate the milestone
+		const deactivateRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 3,
+			method: "tools/call",
+			params: {
+				name: "milestone_set_active",
+				arguments: { name: "Release 1.0", active: false },
+			},
+		});
+		expect(deactivateRes.status).toBe(200);
+
+		// task_list must not return the task now
+		const listAfterRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 4,
+			method: "tools/call",
+			params: { name: "task_list", arguments: {} },
+		});
+		expect(listAfterRes.status).toBe(200);
+		const listAfterText = await listAfterRes.text();
+		expect(listAfterText).not.toContain("Task in inactive milestone");
+
+		// REST GET /api/tasks must also not return the task
+		const restRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		expect(restRes.status).toBe(200);
+		const restTasks = await restRes.json();
+		const found = restTasks.find((t: { title: string }) => t.title === "Task in inactive milestone");
+		expect(found).toBeUndefined();
+
+		// Reactivate and verify the task returns
+		const reactivateRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 5,
+			method: "tools/call",
+			params: {
+				name: "milestone_set_active",
+				arguments: { name: "Release 1.0", active: true },
+			},
+		});
+		expect(reactivateRes.status).toBe(200);
+
+		const listReactivatedRes = await mcpCall({
+			jsonrpc: "2.0",
+			id: 6,
+			method: "tools/call",
+			params: { name: "task_list", arguments: {} },
+		});
+		expect(listReactivatedRes.status).toBe(200);
+		const listReactivatedText = await listReactivatedRes.text();
+		expect(listReactivatedText).toContain("Task in inactive milestone");
+	});
+});
