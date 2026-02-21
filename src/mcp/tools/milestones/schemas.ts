@@ -89,3 +89,21 @@ export const milestoneArchiveSchema: JsonSchema = {
 	required: ["name"],
 	additionalProperties: false,
 };
+
+export const milestoneSetActiveSchema: JsonSchema = {
+	type: "object",
+	properties: {
+		name: {
+			type: "string",
+			minLength: 1,
+			maxLength: 100,
+			description: "Milestone name or ID (case-insensitive match)",
+		},
+		active: {
+			type: "boolean",
+			description: "Set to true to activate (shows in Kanban board), false to deactivate",
+		},
+	},
+	required: ["name", "active"],
+	additionalProperties: false,
+};

@@ -33,6 +33,11 @@ export type MilestoneArchiveArgs = {
 	name: string;
 };
 
+export type MilestoneSetActiveArgs = {
+	name: string;
+	active: boolean;
+};
+
 function formatListBlock(title: string, items: string[]): string {
 	if (items.length === 0) {
 		return `${title}\n  (none)`;
@@ -554,6 +559,31 @@ export class MilestoneHandlers {
 				{
 					type: "text",
 					text: `Archived milestone "${label}"${id ? ` (${id})` : ""}.`,
+				},
+			],
+		};
+	}
+
+	async setMilestoneActive(args: MilestoneSetActiveArgs): Promise<CallToolResult> {
+		const name = normalizeMilestoneName(args.name);
+		if (!name) {
+			throw new McpError("Milestone name cannot be empty.", "VALIDATION_ERROR");
+		}
+
+		const result = await this.core.setMilestoneActive(name, args.active);
+		if (!result.success) {
+			throw new McpError(`Milestone not found: "${name}"`, "NOT_FOUND");
+		}
+
+		const label = result.milestone?.title ?? name;
+		const id = result.milestone?.id;
+		const stateLabel = args.active ? "activated" : "deactivated";
+
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Milestone "${label}"${id ? ` (${id})` : ""} ${stateLabel}.`,
 				},
 			],
 		};

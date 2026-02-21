@@ -1,7 +1,13 @@
 import type { McpServer } from "../../server.ts";
 import type { McpToolHandler } from "../../types.ts";
 import { createSimpleValidatedTool } from "../../validation/tool-wrapper.ts";
-import type { MilestoneAddArgs, MilestoneArchiveArgs, MilestoneRemoveArgs, MilestoneRenameArgs } from "./handlers.ts";
+import type {
+	MilestoneAddArgs,
+	MilestoneArchiveArgs,
+	MilestoneRemoveArgs,
+	MilestoneRenameArgs,
+	MilestoneSetActiveArgs,
+} from "./handlers.ts";
 import { MilestoneHandlers } from "./handlers.ts";
 import {
 	milestoneAddSchema,
@@ -9,6 +15,7 @@ import {
 	milestoneListSchema,
 	milestoneRemoveSchema,
 	milestoneRenameSchema,
+	milestoneSetActiveSchema,
 } from "./schemas.ts";
 
 export function registerMilestoneTools(server: McpServer): void {
@@ -64,9 +71,20 @@ export function registerMilestoneTools(server: McpServer): void {
 		async (input) => handlers.archiveMilestone(input as MilestoneArchiveArgs),
 	);
 
+	const setActiveTool: McpToolHandler = createSimpleValidatedTool(
+		{
+			name: "milestone_set_active",
+			description: "Set a milestone as active (shows in Kanban board) or inactive",
+			inputSchema: milestoneSetActiveSchema,
+		},
+		milestoneSetActiveSchema,
+		async (input) => handlers.setMilestoneActive(input as MilestoneSetActiveArgs),
+	);
+
 	server.addTool(listTool);
 	server.addTool(addTool);
 	server.addTool(renameTool);
 	server.addTool(removeTool);
 	server.addTool(archiveTool);
+	server.addTool(setActiveTool);
 }
