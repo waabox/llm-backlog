@@ -12,26 +12,38 @@ import { SqliteCoordinator, type SyncResult } from "./sqlite-coordinator.ts";
  * Markdown files remain the source of truth; SQLite is the coordination layer.
  */
 export class StorageCoordinator extends FileSystem {
-	private readonly sqlite: SqliteCoordinator;
+	private sqlite: SqliteCoordinator | null = null;
 	private syncDone = false;
 
 	constructor(projectRoot: string) {
 		super(projectRoot);
-		const backlogDir = join(projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
-		this.sqlite = new SqliteCoordinator(backlogDir);
+	}
+
+	/**
+	 * Returns the SQLite coordinator, creating it on first access.
+	 * The backlog/ directory must exist before calling this.
+	 */
+	private getSqlite(): SqliteCoordinator {
+		if (!this.sqlite) {
+			const backlogDir = join(this.rootDir, DEFAULT_DIRECTORIES.BACKLOG);
+			this.sqlite = new SqliteCoordinator(backlogDir);
+		}
+		return this.sqlite;
 	}
 
 	/**
 	 * Override ensureBacklogStructure to auto-sync SQLite on first run if the index is empty.
-	 * Called lazily by Core before any operation.
+	 * Called lazily by Core before any operation. Creates the SQLite coordinator here
+	 * (after super creates the backlog/ directory) so the DB file can always be opened.
 	 */
 	override async ensureBacklogStructure(): Promise<void> {
 		await super.ensureBacklogStructure();
+		const sqlite = this.getSqlite();
 		if (!this.syncDone) {
 			this.syncDone = true;
-			if (this.sqlite.isEmpty()) {
+			if (sqlite.isEmpty()) {
 				const backlogDir = join(this.rootDir, DEFAULT_DIRECTORIES.BACKLOG);
-				await this.sqlite.sync(backlogDir);
+				await sqlite.sync(backlogDir);
 			}
 		}
 	}
@@ -40,7 +52,7 @@ export class StorageCoordinator extends FileSystem {
 	 * Generate the next ID atomically via SQLite. No filesystem scan.
 	 */
 	nextId(entityType: EntityType): string {
-		return this.sqlite.generateNextId(entityType);
+		return this.getSqlite().generateNextId(entityType);
 	}
 
 	/**
@@ -49,7 +61,7 @@ export class StorageCoordinator extends FileSystem {
 	override async saveTask(task: Task): Promise<string> {
 		const filePath = await super.saveTask(task);
 		const content = await Bun.file(filePath).text();
-		this.sqlite.upsertTask(task, EntityType.Task, filePath, content);
+		this.getSqlite().upsertTask(task, EntityType.Task, filePath, content);
 		return filePath;
 	}
 
@@ -59,7 +71,7 @@ export class StorageCoordinator extends FileSystem {
 	override async saveDraft(task: Task): Promise<string> {
 		const filePath = await super.saveDraft(task);
 		const content = await Bun.file(filePath).text();
-		this.sqlite.upsertTask(task, EntityType.Draft, filePath, content);
+		this.getSqlite().upsertTask(task, EntityType.Draft, filePath, content);
 		return filePath;
 	}
 
@@ -67,21 +79,21 @@ export class StorageCoordinator extends FileSystem {
 	 * Override listTasks: query SQLite index instead of scanning the filesystem.
 	 */
 	override async listTasks(filter?: TaskListFilter): Promise<Task[]> {
-		return this.sqlite.queryTasks(EntityType.Task, filter);
+		return this.getSqlite().queryTasks(EntityType.Task, filter);
 	}
 
 	/**
 	 * Override listCompletedTasks: query SQLite index.
 	 */
 	override async listCompletedTasks(): Promise<Task[]> {
-		return this.sqlite.queryTasks("completed");
+		return this.getSqlite().queryTasks("completed");
 	}
 
 	/**
 	 * Override listDrafts: query SQLite index.
 	 */
 	override async listDrafts(): Promise<Task[]> {
-		return this.sqlite.queryTasks(EntityType.Draft);
+		return this.getSqlite().queryTasks(EntityType.Draft);
 	}
 
 	/**
@@ -90,7 +102,7 @@ export class StorageCoordinator extends FileSystem {
 	override async archiveTask(taskId: string): Promise<boolean> {
 		const result = await super.archiveTask(taskId);
 		if (result) {
-			this.sqlite.removeTask(taskId);
+			this.getSqlite().removeTask(taskId);
 		}
 		return result;
 	}
@@ -102,14 +114,14 @@ export class StorageCoordinator extends FileSystem {
 		const task = await this.loadTask(taskId);
 		const result = await super.completeTask(taskId);
 		if (result && task) {
-			this.sqlite.removeTask(taskId);
+			this.getSqlite().removeTask(taskId);
 			const completedDir = join(this.rootDir, DEFAULT_DIRECTORIES.BACKLOG, DEFAULT_DIRECTORIES.COMPLETED);
 			const files = await Array.fromAsync(new Glob(`${task.id}*/${task.id}*.md`).scan({ cwd: completedDir }));
 			const firstFile = files[0];
 			if (firstFile !== undefined) {
 				const filePath = join(completedDir, firstFile);
 				const content = await Bun.file(filePath).text();
-				this.sqlite.upsertTask(task, "completed", filePath, content);
+				this.getSqlite().upsertTask(task, "completed", filePath, content);
 			}
 		}
 		return result;
@@ -117,9 +129,10 @@ export class StorageCoordinator extends FileSystem {
 
 	/**
 	 * Full-text search across all tasks using FTS5.
-	 * Returns an empty array if the query is malformed and SQLite throws a parse error.
+	 * Returns an empty array if SQLite has not been initialized yet or if the query is malformed.
 	 */
 	searchContent(query: string): Task[] {
+		if (!this.sqlite) return [];
 		try {
 			return this.sqlite.searchTasks(query);
 		} catch {
@@ -132,6 +145,6 @@ export class StorageCoordinator extends FileSystem {
 	 */
 	async sync(): Promise<SyncResult> {
 		const backlogDir = join(this.rootDir, DEFAULT_DIRECTORIES.BACKLOG);
-		return this.sqlite.sync(backlogDir);
+		return this.getSqlite().sync(backlogDir);
 	}
 }

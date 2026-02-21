@@ -39,7 +39,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # Claude Code session data (exclude session files, keep agents and skills)
-claude/*
+.claude/*
 !claude/agents
 !claude/agents/**
 !claude/skills
@@ -66,7 +66,6 @@ test-benchmark-report.json
 
 .conductor
 
-# SQLite coordination database
-backlog/llm-backlog.db
+# SQLite WAL files (transient, only exist during active connections)
 backlog/llm-backlog.db-wal
 backlog/llm-backlog.db-shm
