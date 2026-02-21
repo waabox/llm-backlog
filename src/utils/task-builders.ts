@@ -82,21 +82,6 @@ export function toStringArray(value: unknown): string[] {
 	return [String(value)];
 }
 
-/**
- * Parse a Commander option (single value or array) into a strictly positive integer list.
- * Throws an Error when any value is invalid so callers can surface CLI-friendly messaging.
- */
-export function parsePositiveIndexList(value: unknown): number[] {
-	const entries = Array.isArray(value) ? value : value !== undefined && value !== null ? [value] : [];
-	return entries.map((entry) => {
-		const parsed = Number.parseInt(String(entry), 10);
-		if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 1) {
-			throw new Error(`Invalid index: ${String(entry)}. Index must be a positive number (1-based).`);
-		}
-		return parsed;
-	});
-}
-
 export function stringArraysEqual(a: string[], b: string[]): boolean {
 	if (a.length !== b.length) return false;
 	return a.every((value, index) => value === b[index]);

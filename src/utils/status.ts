@@ -32,10 +32,3 @@ export async function getCanonicalStatus(input: string | undefined, core?: Core)
 	}
 	return null;
 }
-
-/**
- * Format a list of valid statuses for display.
- */
-export function formatValidStatuses(configuredStatuses: string[]): string {
-	return configuredStatuses.join(", ");
-}
