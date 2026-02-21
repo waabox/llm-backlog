@@ -40,22 +40,19 @@ Never create tasks autonomously. Never code before the plan is approved.
 # task-42 - Add GraphQL resolver
 
 ## Description
-Short, imperative explanation of the goal and why it is needed. No implementation details.
-
-## Acceptance Criteria
-- [ ] Resolver returns correct data for the happy path
-- [ ] Error response matches the REST contract
-- [ ] P95 latency ≤ 50ms under 100 RPS
+Why this task exists and what it needs to achieve. Purpose, scope, context.
+No implementation details. No code snippets.
+Enough for an independent agent to start with zero prior knowledge.
 
 ## Implementation Plan
-(Added after approval, before writing any code)
+(Added via planSet after user approves, before writing any code)
 1. Research existing resolver patterns
 2. Implement with error handling
 3. Write tests
 4. Benchmark under load
 
 ## Implementation Notes
-(Added after finishing implementation)
+(Added via finalSummary after finishing implementation)
 - Approach taken and why
 - Technical decisions and trade-offs
 - Files modified
@@ -65,13 +62,9 @@ Short, imperative explanation of the goal and why it is needed. No implementatio
 
 **Title** — brief outcome, imperative, no implementation details
 
-**Description** — the *why*: purpose, scope, context. No code snippets. Enough for an independent agent to start with zero prior knowledge.
+**Description** — the *why + what*: purpose, scope, context, and expected outcomes. Write it so an independent agent with no prior project knowledge can understand what done looks like.
 
-**Acceptance Criteria** — the *what*: outcome-focused, testable, verifiable. Not implementation steps.
-- Good: "User can log in with valid credentials."
-- Bad: "Add `handleLogin()` to `auth.ts`."
-
-**Scope** — atomic (single PR). Multi-PR work → subtasks or separate tasks with `--dep` dependencies.
+**Scope** — atomic (single PR). Multi-PR work → subtasks or separate tasks with `dep` dependencies.
 
 ## Task Breakdown
 
@@ -83,4 +76,4 @@ When decomposing a feature:
 
 ## Self-reflection
 
-Before finalising any task, ask: *"Could an AI agent with no prior context on this project pick this up and complete it correctly?"* If not, improve the description or acceptance criteria.
+Before finalising any task, ask: *"Could an AI agent with no prior context on this project pick this up and complete it correctly?"* If not, improve the description.
