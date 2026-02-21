@@ -286,7 +286,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
     onClose();
   };
 
-  const isDoneStatus = (status || "").toLowerCase().includes("done");
+  const lastStatus = availableStatuses && availableStatuses.length > 0 ? availableStatuses[availableStatuses.length - 1] : null;
+  const isDoneStatus = lastStatus
+    ? (status || "").toLowerCase() === lastStatus.toLowerCase()
+    : (status || "").toLowerCase().includes("done");
 
   const displayId = task?.id ?? "";
   const documentation = task?.documentation ?? [];
