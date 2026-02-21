@@ -55,8 +55,8 @@ import {
 
 export class BacklogServer {
 	private core: Core;
-	private sharedFs: FileSystem | null = null;
-	private sharedGit: GitOperations | null = null;
+	private sharedFs: FileSystem | undefined = undefined;
+	private sharedGit: GitOperations | undefined = undefined;
 	private server: Server<unknown> | null = null;
 	private projectName = "Untitled Project";
 	private sockets = new Set<ServerWebSocket<unknown>>();
@@ -224,8 +224,8 @@ export class BacklogServer {
 					? (key: string) => this.configRepoService?.findUserByApiKey(key) ?? null
 					: undefined,
 				autoPush: !!this.projectRepoUrl,
-				filesystem: this.sharedFs ?? undefined,
-				gitOperations: this.sharedGit ?? undefined,
+				filesystem: this.sharedFs,
+				gitOperations: this.sharedGit,
 			});
 
 			const serveOptions = {
@@ -555,6 +555,8 @@ export class BacklogServer {
 
 		this.core.disposeSearchService();
 		this.core.disposeContentStore();
+		this.sharedFs = undefined;
+		this.sharedGit = undefined;
 		this.contentStore = null;
 		this.storeReadyBroadcasted = false;
 
