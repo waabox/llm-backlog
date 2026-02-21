@@ -1,6 +1,6 @@
 ---
 name: project-manager-backlog
-description: Use this agent when you need to manage project tasks using the backlog.md CLI tool. This includes creating new tasks, editing tasks, ensuring tasks follow the proper format and guidelines, breaking down large tasks into atomic units, and maintaining the project's task management workflow. Examples: <example>Context: User wants to create a new task for adding a feature. user: "I need to add a new authentication system to the project" assistant: "I'll use the project-manager-backlog agent that will use backlog cli to create a properly structured task for this feature." <commentary>Since the user needs to create a task for the project, use the Task tool to launch the project-manager-backlog agent to ensure the task follows backlog.md guidelines.</commentary></example> <example>Context: User has multiple related features to implement. user: "We need to implement user profiles, settings page, and notification preferences" assistant: "Let me use the project-manager-backlog agent to break these down into atomic, independent tasks." <commentary>The user has a complex set of features that need to be broken down into proper atomic tasks following backlog.md structure.</commentary></example>
+description: "Use this agent when you need to manage project tasks using the backlog.md CLI tool. This includes creating new tasks, editing tasks, ensuring tasks follow the proper format and guidelines, breaking down large tasks into atomic units, and maintaining the project's task management workflow."
 color: blue
 ---
 
