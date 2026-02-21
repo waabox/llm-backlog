@@ -187,13 +187,14 @@ export function generateMilestoneGroupedBoard(
 	const now = new Date();
 	const timestamp = now.toISOString().replace("T", " ").substring(0, 19);
 
-	const aliasMap = buildMilestoneAliasMap(milestoneEntities);
+	const activeMilestoneEntities = milestoneEntities.filter((m) => m.active);
+	const aliasMap = buildMilestoneAliasMap(activeMilestoneEntities);
 	const canonicalizeMilestone = (value?: string | null): string => canonicalizeMilestoneValue(value ?? null, aliasMap);
 
 	const milestoneSeen = new Set<string>();
 	const allMilestones: string[] = [];
 
-	for (const milestone of milestoneEntities) {
+	for (const milestone of activeMilestoneEntities) {
 		const id = milestone.id.trim();
 		if (id && !milestoneSeen.has(id.toLowerCase())) {
 			milestoneSeen.add(id.toLowerCase());
@@ -229,7 +230,7 @@ Project: ${projectName}
 			(task) => canonicalizeMilestone(task.milestone).toLowerCase() === milestone.toLowerCase(),
 		);
 		if (milestoneTasks.length > 0) {
-			const milestoneLabel = getMilestoneLabel(milestone, milestoneEntities);
+			const milestoneLabel = getMilestoneLabel(milestone, activeMilestoneEntities);
 			sections.push(generateMilestoneSection(milestoneLabel, milestoneTasks, statuses));
 		}
 	}
