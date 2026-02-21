@@ -66,6 +66,7 @@ test-benchmark-report.json
 
 .conductor
 
-# SQLite WAL files (transient, only exist during active connections)
+# SQLite coordination database (local only — rebuilt from markdown on first run)
+backlog/llm-backlog.db
 backlog/llm-backlog.db-wal
 backlog/llm-backlog.db-shm
