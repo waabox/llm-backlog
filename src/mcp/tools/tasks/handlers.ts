@@ -166,6 +166,7 @@ export class TaskHandlers {
 			limit: args.limit,
 			filters: Object.keys(filters).length > 0 ? filters : undefined,
 			includeCrossBranch: false,
+			excludeInactiveMilestones: true,
 		});
 
 		let filteredByLabels = tasks.filter((task) => isLocalEditableTask(task));
