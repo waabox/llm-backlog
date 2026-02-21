@@ -241,7 +241,7 @@ export class SqliteCoordinator {
 			const prefix = ENTITY_PREFIXES[entityType] ?? entityType.toUpperCase();
 			const row = this.db
 				.prepare<{ max_val: number | null }, [string, string, string]>(
-					`SELECT MAX(CAST(REPLACE(id, ? || '-', '') AS INTEGER)) as max_val
+					`SELECT MAX(CAST(REPLACE(LOWER(id), LOWER(? || '-'), '') AS INTEGER)) as max_val
 					 FROM task_index WHERE entity_type = ? AND id LIKE ? || '-%'`,
 				)
 				.get(prefix, entityType, prefix);

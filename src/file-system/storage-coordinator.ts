@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { Glob } from "bun";
 import { DEFAULT_DIRECTORIES } from "../constants/index.ts";
-import type { Task, TaskListFilter } from "../types/index.ts";
+import type { Task } from "../types/index.ts";
 import { EntityType } from "../types/index.ts";
 import { FileSystem } from "./operations.ts";
 import { SqliteCoordinator, type SyncResult } from "./sqlite-coordinator.ts";
@@ -73,27 +73,6 @@ export class StorageCoordinator extends FileSystem {
 		const content = await Bun.file(filePath).text();
 		this.getSqlite().upsertTask(task, EntityType.Draft, filePath, content);
 		return filePath;
-	}
-
-	/**
-	 * Override listTasks: query SQLite index instead of scanning the filesystem.
-	 */
-	override async listTasks(filter?: TaskListFilter): Promise<Task[]> {
-		return this.getSqlite().queryTasks(EntityType.Task, filter);
-	}
-
-	/**
-	 * Override listCompletedTasks: query SQLite index.
-	 */
-	override async listCompletedTasks(): Promise<Task[]> {
-		return this.getSqlite().queryTasks("completed");
-	}
-
-	/**
-	 * Override listDrafts: query SQLite index.
-	 */
-	override async listDrafts(): Promise<Task[]> {
-		return this.getSqlite().queryTasks(EntityType.Draft);
 	}
 
 	/**
