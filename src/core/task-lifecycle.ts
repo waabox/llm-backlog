@@ -149,8 +149,26 @@ export async function createTask(core: Core, task: Task, autoCommit?: boolean): 
 		}
 	}
 
+	// If this is a subtask, update the parent's subtasks list
+	let parentFilePath: string | undefined;
+	if (task.parentTaskId) {
+		const parent = await core.fs.loadTask(task.parentTaskId);
+		if (parent) {
+			const existing = parent.subtasks ?? [];
+			if (!existing.includes(task.id)) {
+				const updatedParent: Task = { ...parent, subtasks: [...existing, task.id] };
+				parentFilePath = await core.fs.saveTask(updatedParent);
+				if (core.contentStore) {
+					const reloaded = await core.fs.loadTask(parent.id);
+					if (reloaded) core.contentStore.upsertTask(reloaded);
+				}
+			}
+		}
+	}
+
 	if (await core.shouldAutoCommit(autoCommit)) {
-		await core.git.addAndCommitTaskFile(task.id, filepath, "create");
+		const additional = parentFilePath ? [parentFilePath] : undefined;
+		await core.git.addAndCommitTaskFile(task.id, filepath, "create", additional);
 	}
 
 	return filepath;
