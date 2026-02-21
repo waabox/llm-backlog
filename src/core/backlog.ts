@@ -28,6 +28,7 @@ import {
 	getDoneTasksByAge,
 	promoteDraft,
 	renameMilestone,
+	setMilestoneActive,
 } from "./archive-service.ts";
 import {
 	extractLegacyConfigMilestones,
@@ -411,6 +412,10 @@ export class Core {
 		previousTitle?: string;
 	}> {
 		return renameMilestone(this, identifier, title, autoCommit);
+	}
+
+	async setMilestoneActive(identifier: string, active: boolean, autoCommit?: boolean): Promise<{ success: boolean; milestone?: Milestone }> {
+		return setMilestoneActive(this, identifier, active, autoCommit);
 	}
 
 	async completeTask(taskId: string, autoCommit?: boolean): Promise<boolean> {

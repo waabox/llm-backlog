@@ -260,3 +260,33 @@ export async function demoteTask(core: Core, taskId: string, autoCommit?: boolea
 
 	return success;
 }
+
+/**
+ * Sets the active state of a milestone.
+ *
+ * @param core - The Core instance.
+ * @param identifier - The milestone ID or name.
+ * @param active - Whether the milestone is active.
+ * @param autoCommit - Whether to commit the change to git.
+ * @returns Result object with success status and updated milestone.
+ */
+export async function setMilestoneActive(
+	core: Core,
+	identifier: string,
+	active: boolean,
+	autoCommit?: boolean,
+): Promise<{ success: boolean; milestone?: Milestone }> {
+	const result = await core.fs.updateMilestoneActive(identifier, active);
+	if (!result.success || !result.milestone) {
+		return { success: false };
+	}
+
+	if (await core.shouldAutoCommit(autoCommit)) {
+		const label = result.milestone.id ? ` ${result.milestone.id}` : "";
+		const backlogDir = DEFAULT_DIRECTORIES.BACKLOG;
+		const repoRoot = await core.git.stageBacklogDirectory(backlogDir);
+		await core.git.commitChanges(`backlog: Set milestone${label} active=${active}`, repoRoot);
+	}
+
+	return { success: true, milestone: result.milestone };
+}

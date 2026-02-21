@@ -315,6 +315,10 @@ export class FileSystem {
 		return this.milestoneStore.archiveMilestone(identifier);
 	}
 
+	async updateMilestoneActive(identifier: string, active: boolean): Promise<{ success: boolean; milestone?: Milestone }> {
+		return this.milestoneStore.updateMilestoneActive(identifier, active);
+	}
+
 	// Config operations - delegated to ConfigStore
 	async loadConfig(): Promise<BacklogConfig | null> {
 		// Ensure legacy migration is checked before reading config
