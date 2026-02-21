@@ -2,14 +2,13 @@ import type { Task } from "../types/index.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { transformCodePathsPlain } from "./code-path.ts";
 
-
 const STATUS_ICONS: Record<string, string> = {
-	"Done": "✔",
+	Done: "✔",
 	"In Progress": "◒",
-	"Blocked": "●",
+	Blocked: "●",
 	"To Do": "○",
-	"Review": "◆",
-	"Testing": "▣",
+	Review: "◆",
+	Testing: "▣",
 };
 
 function formatStatusWithIcon(status: string): string {
