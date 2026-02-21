@@ -1,5 +1,10 @@
 # Backlog.md
 
+[![CI](https://github.com/waabox/llm-backlog/actions/workflows/ci.yml/badge.svg)](https://github.com/waabox/llm-backlog/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/backlog.md)](https://www.npmjs.com/package/backlog.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Bun](https://img.shields.io/badge/runtime-Bun-black?logo=bun)](https://bun.sh)
+
 A project backlog for humans and AI agents. Tasks live as plain Markdown files inside a Git repository. A web UI lets humans manage them visually; an MCP endpoint lets AI agents read, create, and update them programmatically.
 
 ---
