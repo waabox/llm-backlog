@@ -45,6 +45,23 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	const [showAllUnassigned, setShowAllUnassigned] = useState(false);
 	const [showCompleted, setShowCompleted] = useState(false);
 	const [archivingMilestoneKey, setArchivingMilestoneKey] = useState<string | null>(null);
+	const [togglingActiveKey, setTogglingActiveKey] = useState<string | null>(null);
+
+	const handleToggleActive = useCallback(
+		async (milestone: Milestone) => {
+			setTogglingActiveKey(milestone.id);
+			setError(null);
+			try {
+				await apiClient.setMilestoneActive(milestone.id, !milestone.active);
+				await onRefreshData?.();
+			} catch (err) {
+				setError(err instanceof Error ? err.message : "Failed to update milestone");
+			} finally {
+				setTogglingActiveKey(null);
+			}
+		},
+		[onRefreshData],
+	);
 
 	const archivedMilestoneIds = useMemo(
 		() => collectArchivedMilestoneKeys(archivedMilestones, milestoneEntities),
@@ -295,18 +312,33 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 				<div className="px-5 py-4">
 					{/* Header row */}
 					<div className="flex items-center justify-between gap-4">
-						<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-							{bucket.milestone ? (
-								<Link
-									to={`/milestones/${bucket.milestone}`}
-									className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-								>
-									{bucket.label}
-								</Link>
-							) : (
-								bucket.label
-							)}
-						</h3>
+						<div className="flex items-center gap-2 min-w-0">
+							<h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
+								{bucket.milestone ? (
+									<Link
+										to={`/milestones/${bucket.milestone}`}
+										className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+									>
+										{bucket.label}
+									</Link>
+								) : (
+									bucket.label
+								)}
+							</h3>
+							{(() => {
+								const milestoneEntity = milestoneEntities.find((m) => m.id === bucket.milestone);
+								if (!milestoneEntity) return null;
+								return (
+									<span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+										milestoneEntity.active
+											? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+											: "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+									}`}>
+										{milestoneEntity.active ? "Active" : "Inactive"}
+									</span>
+								);
+							})()}
+						</div>
 						{isEmpty ? (
 							<span className="text-sm text-gray-400 dark:text-gray-500">
 								{isDragging ? "Drop here" : "No tasks"}
@@ -367,6 +399,21 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 								</svg>
 								List
 							</Link>
+							{!isViewer && (() => {
+								const milestoneEntity = milestoneEntities.find((m) => m.id === bucket.milestone);
+								if (!milestoneEntity) return null;
+								const isToggling = togglingActiveKey === milestoneEntity.id;
+								return (
+									<button
+										type="button"
+										onClick={() => void handleToggleActive(milestoneEntity)}
+										disabled={isToggling}
+										className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-60"
+									>
+										{isToggling ? "Saving..." : milestoneEntity.active ? "Deactivate" : "Activate"}
+									</button>
+								);
+							})()}
 							{!isViewer && (
 							<button
 								type="button"
