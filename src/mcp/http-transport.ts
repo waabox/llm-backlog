@@ -37,6 +37,7 @@ export type McpRequestHandlerOptions = {
 	authEnabled: boolean;
 	findUserByApiKey?: (apiKey: string) => AuthUser | null;
 	debug?: boolean;
+	autoPush?: boolean;
 };
 
 /**
@@ -62,9 +63,13 @@ export type McpRequestHandler = {
  * @returns A handler object with handleRequest and stop methods.
  */
 export async function createMcpRequestHandler(options: McpRequestHandlerOptions): Promise<McpRequestHandler> {
-	const { projectRoot, authEnabled, findUserByApiKey, debug } = options;
+	const { projectRoot, authEnabled, findUserByApiKey, debug, autoPush } = options;
 
 	const mcpServer = await createMcpServer(projectRoot, { debug });
+	if (autoPush) {
+		mcpServer.git.setAutoPush(true);
+		mcpServer.setAutoCommitOverride(true);
+	}
 	const appName = getPackageName();
 	const appVersion = await getVersion();
 

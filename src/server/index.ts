@@ -4,7 +4,7 @@ import { $ } from "bun";
 import { Core } from "../core/backlog.ts";
 import type { ContentStore } from "../core/content-store.ts";
 import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
-import { watchConfig } from "../utils/config-watcher.ts";
+import { watchBacklogDir, watchConfig } from "../utils/config-watcher.ts";
 // @ts-expect-error
 import favicon from "../web/favicon.png" with { type: "file" };
 import indexHtml from "../web/index.html";
@@ -60,6 +60,7 @@ export class BacklogServer {
 	private unsubscribeContentStore?: () => void;
 	private storeReadyBroadcasted = false;
 	private configWatcher: { stop: () => void } | null = null;
+	private backlogWatcher: { stop: () => void } | null = null;
 	private configRepoService: ConfigRepoService | null = null;
 	private projectRepoService: ProjectRepoService | null = null;
 	private authEnabled = false;
@@ -175,6 +176,15 @@ export class BacklogServer {
 			},
 		});
 
+		// When running with a remote repo the MCP handler uses its own Core instance,
+		// so task mutations bypass this.core's ContentStore. Watch the backlog directory
+		// on disk to detect those changes and notify the UI via WebSocket.
+		if (this.projectRepoUrl) {
+			this.backlogWatcher = watchBacklogDir(this.core, () => {
+				this.broadcastTasksUpdated();
+			});
+		}
+
 		// Initialize auth if environment variables are configured
 		this.googleClientId = process.env.GOOGLE_CLIENT_ID ?? null;
 		const authConfigRepo = process.env.AUTH_CONFIG_REPO ?? null;
@@ -207,6 +217,7 @@ export class BacklogServer {
 				findUserByApiKey: mcpAuthEnabled
 					? (key: string) => this.configRepoService?.findUserByApiKey(key) ?? null
 					: undefined,
+				autoPush: !!this.projectRepoUrl,
 			});
 
 			const serveOptions = {
@@ -514,6 +525,12 @@ export class BacklogServer {
 		try {
 			this.configWatcher?.stop();
 			this.configWatcher = null;
+		} catch {}
+
+		// Stop backlog directory watcher
+		try {
+			this.backlogWatcher?.stop();
+			this.backlogWatcher = null;
 		} catch {}
 
 		// Stop MCP handler

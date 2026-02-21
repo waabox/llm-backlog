@@ -308,8 +308,12 @@ export class ContentStore {
 
 	private createTaskWatcher(): WatchHandle {
 		const tasksDir = this.filesystem.tasksDir;
-		const watcher: FSWatcher = watch(tasksDir, { recursive: false }, (eventType, filename) => {
-			const file = this.normalizeFilename(filename);
+		// recursive: true so changes inside task subdirectories (e.g. tasks/task-2/task-2.md)
+		// are detected, not just files at the top level of tasksDir.
+		const watcher: FSWatcher = watch(tasksDir, { recursive: true }, (eventType, filename) => {
+			const rawPath = this.normalizeFilename(filename);
+			// rawPath may be a subpath like "task-2/task-2 - Title.md"; extract the leaf name.
+			const file = rawPath ? basename(rawPath) : null;
 			// Accept any prefix pattern (task-, jira-, etc.) followed by ID and ending in .md
 			if (!file || !/^[a-zA-Z]+-/.test(file) || !file.endsWith(".md")) {
 				this.enqueue(async () => {
@@ -323,7 +327,8 @@ export class ContentStore {
 				if (!taskId) return;
 				const normalizedTaskId = normalizeTaskId(taskId);
 
-				const fullPath = join(tasksDir, file);
+				// Use the full relative path (rawPath) so we find files inside subdirectories.
+				const fullPath = rawPath ? join(tasksDir, rawPath) : join(tasksDir, file);
 				const exists = await Bun.file(fullPath).exists();
 
 				if (!exists && eventType === "rename") {
