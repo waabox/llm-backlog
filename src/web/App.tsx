@@ -500,7 +500,7 @@ function AppRoutes() {
             path="milestones"
             element={
             <MilestonesPage
-              tasks={tasks}
+              tasks={topLevelTasks}
               statuses={statuses}
               milestoneEntities={milestoneEntities}
               archivedMilestones={archivedMilestones}
@@ -513,7 +513,7 @@ function AppRoutes() {
             path="milestones/:milestoneId"
             element={
               <MilestonesPage
-                tasks={tasks}
+                tasks={topLevelTasks}
                 statuses={statuses}
                 milestoneEntities={milestoneEntities}
                 archivedMilestones={archivedMilestones}
