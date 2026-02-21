@@ -184,6 +184,7 @@ export async function createDraft(core: Core, task: Task, autoCommit?: boolean):
 
 	if (await core.shouldAutoCommit(autoCommit)) {
 		await core.git.addFile(filepath);
+		await core.git.stageDbFile();
 		await core.git.commitTaskChange(task.id, `Create draft ${task.id}`, filepath);
 	}
 
@@ -261,6 +262,7 @@ export async function updateDraft(core: Core, task: Task, autoCommit?: boolean):
 
 	if (await core.shouldAutoCommit(autoCommit)) {
 		await core.git.addFile(filepath);
+		await core.git.stageDbFile();
 		await core.git.commitTaskChange(task.id, `Update draft ${task.id}`, filepath);
 	}
 }

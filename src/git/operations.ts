@@ -26,6 +26,25 @@ export class GitOperations {
 		this.autoPush = enabled;
 	}
 
+	/**
+	 * Stage backlog/llm-backlog.db if it has uncommitted changes.
+	 * Called alongside task/draft commits so the SQLite index stays in sync with the markdown files.
+	 */
+	async stageDbFile(repoRoot?: string): Promise<void> {
+		const cwd = repoRoot ?? this.projectRoot;
+		try {
+			const { stdout } = await this.execGit(
+				["status", "--porcelain", "--", "backlog/llm-backlog.db"],
+				{ cwd, readOnly: true },
+			);
+			if (stdout.trim()) {
+				await this.execGit(["add", "--", "backlog/llm-backlog.db"], { cwd });
+			}
+		} catch {
+			// DB file not present — nothing to stage
+		}
+	}
+
 	async addFile(filePath: string): Promise<void> {
 		const context = await this.getPathContext(filePath);
 		if (context) {
@@ -301,6 +320,9 @@ export class GitOperations {
 					await this.execGit(["add", extraPath], { cwd: repoRoot });
 				}
 			}
+
+			// Stage SQLite index so it stays in sync with the committed markdown
+			await this.stageDbFile(repoRoot);
 
 			// Commit all staged files
 			await this.commitStagedChanges(actionMessages[action], repoRoot);
