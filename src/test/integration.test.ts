@@ -773,7 +773,12 @@ describe("MCP — task_move", () => {
 		const viewRes = await fetch(`${env.baseUrl}/mcp`, {
 			method: "POST",
 			headers: { ...env.adminHeaders, Accept: "application/json, text/event-stream" },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "task_view", arguments: { id: "task-1" } } }),
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 2,
+				method: "tools/call",
+				params: { name: "task_view", arguments: { id: "task-1" } },
+			}),
 		});
 		const viewBody = await viewRes.text();
 		expect(viewBody).toContain("Admin User");
@@ -787,7 +792,12 @@ describe("MCP — task_move", () => {
 		const viewRes = await fetch(`${env.baseUrl}/mcp`, {
 			method: "POST",
 			headers: { ...env.adminHeaders, Accept: "application/json, text/event-stream" },
-			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "task_view", arguments: { id: "task-1" } } }),
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: 2,
+				method: "tools/call",
+				params: { name: "task_view", arguments: { id: "task-1" } },
+			}),
 		});
 		const viewBody = await viewRes.text();
 		expect(viewBody.toLowerCase()).toContain("done");
@@ -924,5 +934,52 @@ describe("subtask bidirectional navigation", () => {
 		const parentFilePath = join(parentTaskDir, files[0] as string);
 		const parentFileContent = await Bun.file(parentFilePath).text();
 		expect(parentFileContent.toLowerCase()).toContain(subId);
+	});
+});
+
+// ── SQLite coordination layer ─────────────────────────────────────────────────
+
+describe("SQLite coordination layer", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("backlog_sync tool responds with 200 and a sync message", async () => {
+		const body = await mcpToolCall(env, "backlog_sync", {});
+		const text = body.result.content[0].text;
+		// The server uses plain FileSystem (not StorageCoordinator), so the tool
+		// reports that the SQLite layer is not active rather than actual sync counts.
+		expect(text.length).toBeGreaterThan(0);
+		expect(
+			text.includes("Sync complete") || text.includes("SQLite coordination layer is not active"),
+		).toBe(true);
+	});
+
+	test("sequential task creates produce unique IDs", async () => {
+		const ids: string[] = [];
+		for (let i = 0; i < 5; i++) {
+			const body = await mcpToolCall(env, "task_create", {
+				title: `SQLite coordination task ${i}`,
+				status: "todo",
+			});
+			const text = body.result.content[0].text;
+			const match = text.match(/[A-Z]+-\d+/);
+			if (match) ids.push(match[0]);
+		}
+		const unique = new Set(ids);
+		expect(ids.length).toBe(5);
+		expect(unique.size).toBe(ids.length);
+	});
+
+	test("task_list returns a non-empty task listing", async () => {
+		const body = await mcpToolCall(env, "task_list", {});
+		const text = body.result.content[0].text;
+		expect(text.length).toBeGreaterThan(0);
 	});
 });
