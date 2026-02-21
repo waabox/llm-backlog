@@ -65,3 +65,8 @@ run.sh
 test-benchmark-report.json
 
 .conductor
+
+# SQLite coordination database
+backlog/llm-backlog.db
+backlog/llm-backlog.db-wal
+backlog/llm-backlog.db-shm
