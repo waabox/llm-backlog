@@ -14,7 +14,8 @@ import { parseTask } from "../markdown/parser.ts";
 import type { BacklogConfig, Task } from "../types/index.ts";
 import { buildPathIdRegex, normalizeId } from "../utils/prefix-config.ts";
 import { normalizeTaskId, normalizeTaskIdentity } from "../utils/task-path.ts";
-import type { TaskDirectoryType } from "./cross-branch-tasks.ts";
+
+export type TaskDirectoryType = "task" | "draft" | "archived" | "completed";
 
 /** Default prefix for tasks */
 const DEFAULT_TASK_PREFIX = "task";
