@@ -1129,6 +1129,12 @@ describe("inactive milestone task filtering", () => {
 		});
 		expect(createRes.status).toBe(200);
 
+		// Capture the task ID via REST (while milestone is still active)
+		const tasksBeforeRes = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		const tasksBefore = await tasksBeforeRes.json();
+		const createdTask = tasksBefore.find((t: { title: string }) => t.title === "Task in inactive milestone");
+		const createdTaskId = createdTask?.id as string | undefined;
+
 		// Verify the task appears in task_list while milestone is active
 		const listBeforeRes = await mcpCall({
 			jsonrpc: "2.0",
@@ -1169,6 +1175,19 @@ describe("inactive milestone task filtering", () => {
 		const restTasks = await restRes.json();
 		const found = restTasks.find((t: { title: string }) => t.title === "Task in inactive milestone");
 		expect(found).toBeUndefined();
+
+		// task_view must still work directly even when milestone is inactive
+		if (createdTaskId) {
+			const taskViewRes = await mcpCall({
+				jsonrpc: "2.0",
+				id: 7,
+				method: "tools/call",
+				params: { name: "task_view", arguments: { id: createdTaskId } },
+			});
+			expect(taskViewRes.status).toBe(200);
+			const taskViewText = await taskViewRes.text();
+			expect(taskViewText).toContain("Task in inactive milestone");
+		}
 
 		// Reactivate and verify the task returns
 		const reactivateRes = await mcpCall({
