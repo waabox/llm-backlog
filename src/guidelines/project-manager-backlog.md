@@ -1,1 +1,1 @@
-../../.claude/agents/project-manager-backlog.md
+../../claude/agents/project-manager-backlog.md
