@@ -197,7 +197,7 @@ export class SqliteCoordinator {
 
 		const filesToProcess: Array<{ filePath: string; entityType: string; counter: keyof SyncResult }> = [];
 
-		const patterns: Array<{ glob: string; entityType: string; counter: keyof SyncResult }> = [
+		const patterns: Array<{ glob: string; entityType: string; counter: "tasks" | "drafts" | "completed" }> = [
 			{ glob: "tasks/**/*.md", entityType: EntityType.Task, counter: "tasks" },
 			{ glob: "drafts/**/*.md", entityType: EntityType.Draft, counter: "drafts" },
 			{ glob: "completed/**/*.md", entityType: "completed", counter: "completed" },

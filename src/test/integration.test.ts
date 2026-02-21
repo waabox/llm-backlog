@@ -952,7 +952,7 @@ describe("SQLite coordination layer", () => {
 
 	test("backlog_sync tool responds with 200 and a sync message", async () => {
 		const body = await mcpToolCall(env, "backlog_sync", {});
-		const text = body.result.content[0].text;
+		const text = body.result.content[0]?.text ?? "";
 		expect(text).toContain("Sync complete");
 		expect(text).toContain("Tasks:");
 	});
@@ -964,7 +964,7 @@ describe("SQLite coordination layer", () => {
 				title: `SQLite coordination task ${i}`,
 				status: "todo",
 			});
-			const text = body.result.content[0].text;
+			const text = body.result.content[0]?.text ?? "";
 			const match = text.match(/[A-Z]+-\d+/);
 			if (match) ids.push(match[0]);
 		}
@@ -975,7 +975,7 @@ describe("SQLite coordination layer", () => {
 
 	test("task_list returns a non-empty task listing", async () => {
 		const body = await mcpToolCall(env, "task_list", {});
-		const text = body.result.content[0].text;
+		const text = body.result.content[0]?.text ?? "";
 		expect(text.length).toBeGreaterThan(0);
 	});
 });
