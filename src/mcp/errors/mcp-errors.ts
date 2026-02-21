@@ -24,33 +24,6 @@ export class McpValidationError extends McpError {
 }
 
 /**
- * Authentication error for auth failures
- */
-export class McpAuthenticationError extends McpError {
-	constructor(message = "Authentication required") {
-		super(message, "AUTH_ERROR");
-	}
-}
-
-/**
- * Connection error for transport-level failures
- */
-export class McpConnectionError extends McpError {
-	constructor(message: string, details?: unknown) {
-		super(message, "CONNECTION_ERROR", details);
-	}
-}
-
-/**
- * Internal error for unexpected failures
- */
-export class McpInternalError extends McpError {
-	constructor(message = "An unexpected error occurred", details?: unknown) {
-		super(message, "INTERNAL_ERROR", details);
-	}
-}
-
-/**
  * Formats MCP errors into standardized tool responses
  */
 function buildErrorResult(code: string, message: string, details?: unknown): CallToolResult {
