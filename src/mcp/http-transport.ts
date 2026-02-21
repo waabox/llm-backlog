@@ -23,6 +23,8 @@ import {
 	ListToolsRequestSchema,
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { FileSystem } from "../file-system/operations.ts";
+import { GitOperations } from "../git/operations.ts";
 import { extractBearerToken } from "../server/auth/middleware.ts";
 import type { AuthUser } from "../server/auth/users-store.ts";
 import { getPackageName } from "../utils/app-info.ts";
@@ -38,6 +40,8 @@ export type McpRequestHandlerOptions = {
 	findUserByApiKey?: (apiKey: string) => AuthUser | null;
 	debug?: boolean;
 	autoPush?: boolean;
+	filesystem?: FileSystem;
+	gitOperations?: GitOperations;
 };
 
 /**
@@ -63,9 +67,12 @@ export type McpRequestHandler = {
  * @returns A handler object with handleRequest and stop methods.
  */
 export async function createMcpRequestHandler(options: McpRequestHandlerOptions): Promise<McpRequestHandler> {
-	const { projectRoot, authEnabled, findUserByApiKey, debug, autoPush } = options;
+	const { projectRoot, authEnabled, findUserByApiKey, debug, autoPush, filesystem, gitOperations } = options;
 
-	const mcpServer = await createMcpServer(projectRoot, { debug });
+	const mcpServer = await createMcpServer(projectRoot, { debug, filesystem, gitOperations });
+	// Eagerly initialize ContentStore so the patch chain with the Web's ContentStore
+	// is established before the first MCP request arrives.
+	await mcpServer.getContentStore();
 	if (autoPush) {
 		mcpServer.git.setAutoPush(true);
 		mcpServer.setAutoCommitOverride(true);
