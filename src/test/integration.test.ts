@@ -1176,6 +1176,15 @@ describe("inactive milestone task filtering", () => {
 		const found = restTasks.find((t: { title: string }) => t.title === "Task in inactive milestone");
 		expect(found).toBeUndefined();
 
+		// GET /api/search (used by the Kanban board) must also not return the task
+		const searchRes = await fetch(`${env.baseUrl}/api/search`, { headers: env.adminHeaders });
+		expect(searchRes.status).toBe(200);
+		const searchResults = await searchRes.json();
+		const foundInSearch = searchResults.find(
+			(r: { type: string; task?: { title: string } }) => r.type === "task" && r.task?.title === "Task in inactive milestone",
+		);
+		expect(foundInSearch).toBeUndefined();
+
 		// task_view must still work directly even when milestone is inactive
 		if (createdTaskId) {
 			const taskViewRes = await mcpCall({
