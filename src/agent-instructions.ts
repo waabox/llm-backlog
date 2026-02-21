@@ -38,7 +38,7 @@ type GuidelineMarkerKind = "default" | "mcp";
  * Gets the appropriate markers for a given file type
  */
 function getMarkers(fileName: string, kind: GuidelineMarkerKind = "default"): { start: string; end: string } {
-	const label = kind === "mcp" ? "BACKLOG.MD MCP GUIDELINES" : "BACKLOG.MD GUIDELINES";
+	const label = kind === "mcp" ? "LLM-BACKLOG MCP GUIDELINES" : "LLM-BACKLOG GUIDELINES";
 	if (fileName === ".cursorrules") {
 		// .cursorrules doesn't support HTML comments, use markdown-style comments
 		return {
@@ -54,7 +54,7 @@ function getMarkers(fileName: string, kind: GuidelineMarkerKind = "default"): { 
 }
 
 /**
- * Checks if the Backlog.md guidelines are already present in the content
+ * Checks if the llm-backlog guidelines are already present in the content
  */
 function hasBacklogGuidelines(content: string, fileName: string): boolean {
 	const { start } = getMarkers(fileName);
@@ -62,7 +62,7 @@ function hasBacklogGuidelines(content: string, fileName: string): boolean {
 }
 
 /**
- * Wraps the Backlog.md guidelines with appropriate markers
+ * Wraps the llm-backlog guidelines with appropriate markers
  */
 function wrapWithMarkers(content: string, fileName: string, kind: GuidelineMarkerKind = "default"): string {
 	const { start, end } = getMarkers(fileName, kind);
@@ -157,13 +157,13 @@ export async function addAgentInstructions(
 					existing = mcpStripped.content;
 				}
 
-				// Check if Backlog.md guidelines are already present
+				// Check if llm-backlog guidelines are already present
 				if (hasBacklogGuidelines(existing, name)) {
 					// Guidelines already exist, skip this file
 					continue;
 				}
 
-				// Append Backlog.md guidelines with markers
+				// Append llm-backlog guidelines with markers
 				if (!existing.endsWith("\n")) existing += "\n";
 				finalContent = existing + wrapWithMarkers(content, name);
 			} catch (error) {

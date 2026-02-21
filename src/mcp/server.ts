@@ -36,16 +36,16 @@ import type {
 /**
  * Minimal MCP server implementation for stdio transport.
  *
- * The Backlog.md MCP server is intentionally local-only and exposes tools,
+ * The llm-backlog MCP server is intentionally local-only and exposes tools,
  * resources, and prompts through the stdio transport so that desktop editors
  * (e.g. Claude Code) can interact with a project without network exposure.
  */
 const APP_NAME = getPackageName();
 const APP_VERSION = await getVersion();
 const INSTRUCTIONS_NORMAL =
-	"At the beginning of each session, read the backlog://workflow/overview resource to understand when and how to use Backlog.md for task management.";
+	"At the beginning of each session, read the backlog://workflow/overview resource to understand when and how to use llm-backlog for task management.";
 const INSTRUCTIONS_FALLBACK =
-	"Backlog.md is not initialized in this directory. Read the backlog://init-required resource for setup instructions.";
+	"llm-backlog is not initialized in this directory. Read the backlog://init-required resource for setup instructions.";
 
 type ServerInitOptions = {
 	debug?: boolean;

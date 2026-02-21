@@ -1,20 +1,20 @@
-<!-- BACKLOG.MD MCP GUIDELINES START -->
+<!-- LLM-BACKLOG MCP GUIDELINES START -->
 
 <CRITICAL_INSTRUCTION>
 
 ## BACKLOG WORKFLOW INSTRUCTIONS
 
-This project uses Backlog.md MCP for all task and project management.
+This project uses llm-backlog MCP for all task and project management.
 
 **CRITICAL RESOURCE**: Read `backlog://workflow/overview` to understand when and how to use Backlog for this project.
 
 - **First time working here?** Read the overview resource IMMEDIATELY to learn the workflow
-- **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
+- **Already familiar?** You should have the overview cached ("## llm-backlog Overview (MCP)")
 - **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
 
 </CRITICAL_INSTRUCTION>
 
-<!-- BACKLOG.MD MCP GUIDELINES END -->
+<!-- LLM-BACKLOG MCP GUIDELINES END -->
 
 When working on a task, assign it yourself.
 
@@ -40,7 +40,7 @@ After implementation, simplify: you know more about the task now than when you s
 
 ## Structure
 
-- **CLI Tool**: Bun + TypeScript global npm package (`npm i -g backlog.md`)
+- **CLI Tool**: Bun + TypeScript global npm package (`npm i -g llm-backlog`)
 - **Tasks**: Markdown files in `backlog/` directory
 - **Git**: `BACK-123 - Title` commits, `tasks/back-123-feature-name` branches, `gh` for PRs
 

@@ -16,7 +16,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const createTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_create",
-			description: "Create a new task using Backlog.md",
+			description: "Create a new task using llm-backlog",
 			inputSchema: taskCreateSchema,
 		},
 		taskCreateSchema,
@@ -26,7 +26,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const listTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_list",
-			description: "List Backlog.md tasks from with optional filtering",
+			description: "List llm-backlog tasks from with optional filtering",
 			inputSchema: taskListSchema,
 		},
 		taskListSchema,
@@ -36,7 +36,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const searchTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_search",
-			description: "Search Backlog.md tasks by title and description",
+			description: "Search llm-backlog tasks by title and description",
 			inputSchema: taskSearchSchema,
 		},
 		taskSearchSchema,
@@ -46,7 +46,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const editTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_edit",
-			description: "Edit a Backlog.md task, including metadata, implementation plan, final summary, and dependencies",
+			description: "Edit a llm-backlog task, including metadata, implementation plan, final summary, and dependencies",
 			inputSchema: taskEditSchema,
 		},
 		taskEditSchema,
@@ -56,7 +56,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const viewTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_view",
-			description: "View a Backlog.md task details",
+			description: "View a llm-backlog task details",
 			inputSchema: taskViewSchema,
 		},
 		taskViewSchema,
@@ -66,7 +66,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const archiveTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_archive",
-			description: "Archive a Backlog.md task",
+			description: "Archive a llm-backlog task",
 			inputSchema: taskArchiveSchema,
 		},
 		taskArchiveSchema,
@@ -76,7 +76,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const completeTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_complete",
-			description: "Complete a Backlog.md task (move it to the completed folder)",
+			description: "Complete a llm-backlog task (move it to the completed folder)",
 			inputSchema: taskCompleteSchema,
 		},
 		taskCompleteSchema,

@@ -1,11 +1,11 @@
 
-<!-- BACKLOG.MD MCP GUIDELINES START -->
+<!-- LLM-BACKLOG MCP GUIDELINES START -->
 
 <CRITICAL_INSTRUCTION>
 
 ## BACKLOG WORKFLOW INSTRUCTIONS
 
-This project uses Backlog.md MCP for all task and project management activities.
+This project uses llm-backlog MCP for all task and project management activities.
 
 **CRITICAL GUIDANCE**
 
@@ -13,7 +13,7 @@ This project uses Backlog.md MCP for all task and project management activities.
 - If your client only supports tools or the above request fails, call `backlog.get_workflow_overview()` tool to load the tool-oriented overview (it lists the matching guide tools).
 
 - **First time working here?** Read the overview resource IMMEDIATELY to learn the workflow
-- **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
+- **Already familiar?** You should have the overview cached ("## llm-backlog Overview (MCP)")
 - **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
 
 These guides cover:
@@ -26,7 +26,7 @@ You MUST read the overview resource to understand the complete workflow. The inf
 
 </CRITICAL_INSTRUCTION>
 
-<!-- BACKLOG.MD MCP GUIDELINES END -->
+<!-- LLM-BACKLOG MCP GUIDELINES END -->
 
 When you're working on a task, you should assign it yourself: -a @{your-name}
 
@@ -69,7 +69,7 @@ If you can simplify the code, do it.
 
 ## Core Structure
 
-- **CLI Tool**: Built with Bun and TypeScript as a global npm package (`npm i -g backlog.md`)
+- **CLI Tool**: Built with Bun and TypeScript as a global npm package (`npm i -g llm-backlog`)
 - **Source Code**: Located in `/src` directory with modular TypeScript structure
 - **Task Management**: Uses markdown files in `backlog/` directory structure
 - **Workflow**: Git-integrated with task IDs referenced in commits and PRs

@@ -1,7 +1,7 @@
-# Backlog.md
+# llm-backlog
 
 [![CI](https://github.com/waabox/llm-backlog/actions/workflows/ci.yml/badge.svg)](https://github.com/waabox/llm-backlog/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/backlog.md)](https://www.npmjs.com/package/backlog.md)
+[![npm](https://img.shields.io/npm/v/llm-backlog)](https://www.npmjs.com/package/llm-backlog)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/runtime-Bun-black?logo=bun)](https://bun.sh)
 
@@ -202,7 +202,7 @@ users:
 
 | Tool | What it does |
 |---|---|
-| `get_workflow_overview` | Retrieve the Backlog.md workflow guide for the current project |
+| `get_workflow_overview` | Retrieve the llm-backlog workflow guide for the current project |
 
 ### task_edit field reference
 

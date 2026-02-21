@@ -1,4 +1,4 @@
-## Backlog.md Workflow
+## llm-backlog Workflow
 
 **Project statuses:** {{STATUSES}}
 

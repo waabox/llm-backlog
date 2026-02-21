@@ -80,7 +80,7 @@ users:
 
 # Users
 
-Managed by Backlog.md integration tests.
+Managed by llm-backlog integration tests.
 `;
 	await writeFile(join(dir, "users.md"), usersMd);
 	await gitCommitAll(dir, "initial: add users.md");

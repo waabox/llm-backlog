@@ -15,10 +15,10 @@ export const WORKFLOW_GUIDES: WorkflowGuideDefinition[] = [
 		key: "overview",
 		uri: "backlog://workflow/overview",
 		name: "Backlog Workflow",
-		description: "Complete workflow guide for Backlog.md task management",
+		description: "Complete workflow guide for llm-backlog task management",
 		mimeType: "text/markdown",
 		toolName: "get_workflow_overview",
-		toolDescription: "Retrieve the Backlog.md workflow guide in markdown format",
+		toolDescription: "Retrieve the llm-backlog workflow guide in markdown format",
 	},
 ];
 

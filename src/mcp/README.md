@@ -1,6 +1,6 @@
-# Backlog.md MCP Implementation (MVP)
+# llm-backlog MCP Implementation (MVP)
 
-This directory exposes a minimal stdio MCP surface so local agents can work with backlog.md without duplicating business
+This directory exposes a minimal stdio MCP surface so local agents can work with llm-backlog without duplicating business
 logic.
 
 ## What’s included

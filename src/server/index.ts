@@ -489,7 +489,7 @@ export class BacklogServer {
 			}
 
 			const url = `http://localhost:${this.server.port}`;
-			console.log(`🚀 Backlog.md browser interface running at ${url}`);
+			console.log(`🚀 llm-backlog browser interface running at ${url}`);
 			console.log(`🔌 MCP endpoint: ${url}/mcp`);
 			console.log(`📊 Project: ${this.projectName}`);
 			const stopKey = process.platform === "darwin" ? "Cmd+C" : "Ctrl+C";

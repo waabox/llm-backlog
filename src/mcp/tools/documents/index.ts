@@ -24,7 +24,7 @@ export function registerDocumentTools(server: McpServer, _config: BacklogConfig)
 	const listDocumentsTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "document_list",
-			description: "List Backlog.md documents with optional substring filtering",
+			description: "List llm-backlog documents with optional substring filtering",
 			inputSchema: documentListSchema,
 		},
 		documentListSchema,
@@ -34,7 +34,7 @@ export function registerDocumentTools(server: McpServer, _config: BacklogConfig)
 	const viewDocumentTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "document_view",
-			description: "View a Backlog.md document including metadata and markdown content",
+			description: "View a llm-backlog document including metadata and markdown content",
 			inputSchema: documentViewSchema,
 		},
 		documentViewSchema,
@@ -44,7 +44,7 @@ export function registerDocumentTools(server: McpServer, _config: BacklogConfig)
 	const createDocumentTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "document_create",
-			description: "Create a Backlog.md document using the shared ID generator",
+			description: "Create a llm-backlog document using the shared ID generator",
 			inputSchema: documentCreateSchema,
 		},
 		documentCreateSchema,
@@ -54,7 +54,7 @@ export function registerDocumentTools(server: McpServer, _config: BacklogConfig)
 	const updateDocumentTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "document_update",
-			description: "Update an existing Backlog.md document's content and optional title",
+			description: "Update an existing llm-backlog document's content and optional title",
 			inputSchema: documentUpdateSchema,
 		},
 		documentUpdateSchema,
@@ -64,7 +64,7 @@ export function registerDocumentTools(server: McpServer, _config: BacklogConfig)
 	const searchDocumentTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "document_search",
-			description: "Search Backlog.md documents using the shared fuzzy index",
+			description: "Search llm-backlog documents using the shared fuzzy index",
 			inputSchema: documentSearchSchema,
 		},
 		documentSearchSchema,

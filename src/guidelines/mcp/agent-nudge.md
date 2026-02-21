@@ -3,7 +3,7 @@
 
 ## BACKLOG WORKFLOW INSTRUCTIONS
 
-This project uses Backlog.md MCP for all task and project management.
+This project uses llm-backlog MCP for all task and project management.
 
 Read `backlog://workflow/overview` (or call `get_workflow_overview`) to get the complete workflow before creating or working on tasks.
 

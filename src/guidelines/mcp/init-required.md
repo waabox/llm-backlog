@@ -1,6 +1,6 @@
-# Backlog.md Not Initialized
+# llm-backlog Not Initialized
 
-This directory does not have Backlog.md initialized.
+This directory does not have llm-backlog initialized.
 
 **To set up task management for this project, run:**
 
@@ -10,9 +10,9 @@ backlog init
 
 This will create the necessary `backlog/` directory structure and configuration file.
 
-## What is Backlog.md?
+## What is llm-backlog?
 
-Backlog.md is a task management system that uses markdown files to track features, bugs, and structured work. It integrates with AI coding agents to help you manage your project tasks effectively.
+llm-backlog is a task management system that uses markdown files to track features, bugs, and structured work. It integrates with AI coding agents to help you manage your project tasks effectively.
 
 ## Next Steps
 
@@ -21,4 +21,4 @@ Backlog.md is a task management system that uses markdown files to track feature
 3. Choose your preferred AI agent integration (Claude Code, Codex, Gemini CLI, or Kiro)
 4. Start creating and managing tasks!
 
-For more information, visit: https://backlog.md
+For more information, visit: https://github.com/waabox/llm-backlog

@@ -1,5 +1,5 @@
 /**
- * Authentication middleware helpers for the Backlog.md HTTP server.
+ * Authentication middleware helpers for the llm-backlog HTTP server.
  *
  * Provides request-level auth checks: bearer-token extraction, route
  * classification (public vs protected), write-method detection, and a
