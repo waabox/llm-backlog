@@ -1,7 +1,21 @@
 import type { Task } from "../types/index.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { transformCodePathsPlain } from "./code-path.ts";
-import { formatStatusWithIcon } from "./status-icon.ts";
+
+
+const STATUS_ICONS: Record<string, string> = {
+	"Done": "✔",
+	"In Progress": "◒",
+	"Blocked": "●",
+	"To Do": "○",
+	"Review": "◆",
+	"Testing": "▣",
+};
+
+function formatStatusWithIcon(status: string): string {
+	const icon = STATUS_ICONS[status] ?? "○";
+	return `${icon} ${status}`;
+}
 
 export type TaskPlainTextOptions = {
 	filePathOverride?: string;
