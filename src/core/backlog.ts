@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { DEFAULT_DIRECTORIES, DEFAULT_STATUSES } from "../constants/index.ts";
-import { FileSystem } from "../file-system/operations.ts";
+import type { FileSystem } from "../file-system/operations.ts";
+import { StorageCoordinator } from "../file-system/storage-coordinator.ts";
 import { GitOperations } from "../git/operations.ts";
 import {
 	type BacklogConfig,
@@ -115,7 +116,7 @@ export class Core {
 			gitOperations?: GitOperations;
 		},
 	) {
-		this.fs = options?.filesystem ?? new FileSystem(projectRoot);
+		this.fs = options?.filesystem ?? new StorageCoordinator(projectRoot);
 		this.git = options?.gitOperations ?? new GitOperations(projectRoot);
 		// Disable watchers by default for CLI commands (non-interactive)
 		// Interactive modes (TUI, browser, MCP) should explicitly pass enableWatchers: true
@@ -285,6 +286,9 @@ export class Core {
 	 * - Decision: /decisions only
 	 */
 	async generateNextId(type: EntityType = EntityType.Task, parent?: string): Promise<string> {
+		if (this.fs instanceof StorageCoordinator && type !== EntityType.Document) {
+			return this.fs.nextId(type);
+		}
 		return generateNextId(this, type, parent);
 	}
 
