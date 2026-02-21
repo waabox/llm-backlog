@@ -13,12 +13,14 @@ import {
 	resolveTaskConflict,
 } from "./task-loader.ts";
 import { applyTaskFilters, filterLocalEditableTasks } from "./task-mutation.ts";
+import { milestoneKey } from "./milestones.ts";
 
 export interface TaskQueryOptions {
 	filters?: TaskListFilter;
 	query?: string;
 	limit?: number;
 	includeCrossBranch?: boolean;
+	excludeInactiveMilestones?: boolean;
 }
 
 export function buildLatestStateMap(
@@ -76,12 +78,28 @@ export function getActiveAndCompletedIdsFromStateMap(latestState: Map<string, Br
 }
 
 export async function queryTasks(core: Core, options: TaskQueryOptions = {}): Promise<Task[]> {
-	const { filters, query, limit } = options;
+	const { filters, query, limit, excludeInactiveMilestones } = options;
 	const trimmedQuery = query?.trim();
 	const includeCrossBranch = options.includeCrossBranch ?? true;
 
+	let inactiveMilestoneKeys: Set<string> | undefined;
+	if (excludeInactiveMilestones) {
+		const milestones = await core.fs.listMilestones();
+		const inactive = milestones.filter((m) => !m.active);
+		if (inactive.length > 0) {
+			inactiveMilestoneKeys = new Set(inactive.map((m) => milestoneKey(m.id)));
+		}
+	}
+	const inactiveKeys = inactiveMilestoneKeys;
+
 	const applyFiltersAndLimit = (collection: Task[]): Task[] => {
 		let filtered = applyTaskFilters(collection, filters);
+		if (inactiveKeys) {
+			filtered = filtered.filter((task) => {
+				const key = milestoneKey(task.milestone ?? "");
+				return !key || !inactiveKeys.has(key);
+			});
+		}
 		if (!includeCrossBranch) {
 			filtered = filterLocalEditableTasks(filtered);
 		}
