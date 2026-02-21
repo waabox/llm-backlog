@@ -121,6 +121,7 @@ ${description || `Milestone: ${title}`}`,
 			id,
 			title,
 			description: description || `Milestone: ${title}`,
+			active: false,
 			rawContent: parseMilestone(content).rawContent,
 		};
 	}
@@ -231,6 +232,28 @@ ${description || `Milestone: ${title}`}`,
 		}
 	}
 
+	async updateMilestoneActive(identifier: string, active: boolean): Promise<{ success: boolean; milestone?: Milestone }> {
+		const normalized = identifier.trim();
+		if (!normalized) {
+			return { success: false };
+		}
+
+		try {
+			const milestoneMatch = await this.findMilestoneFile(normalized, "active");
+			if (!milestoneMatch) {
+				return { success: false };
+			}
+
+			const { milestone, filepath } = milestoneMatch;
+			const updatedContent = this.serializeMilestoneContent(milestone.id, milestone.title, milestone.rawContent, active);
+			await Bun.write(filepath, updatedContent);
+
+			return { success: true, milestone: parseMilestone(updatedContent) };
+		} catch {
+			return { success: false };
+		}
+	}
+
 	private buildMilestoneIdentifierKeys(identifier: string): Set<string> {
 		const normalized = identifier.trim().toLowerCase();
 		const keys = new Set<string>();
@@ -266,10 +289,11 @@ ${description || `Milestone: ${title}`}`,
 		return `${id} - ${safeTitle}.md`;
 	}
 
-	private serializeMilestoneContent(id: string, title: string, rawContent: string): string {
+	private serializeMilestoneContent(id: string, title: string, rawContent: string, active = false): string {
 		return `---
 id: ${id}
 title: "${title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
+active: ${active}
 ---
 
 ${rawContent.trim()}

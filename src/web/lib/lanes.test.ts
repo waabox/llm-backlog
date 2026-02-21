@@ -48,7 +48,7 @@ describe("buildLanes", () => {
 			"milestone",
 			tasks,
 			[],
-			[{ id: "m-1", title: "Release 1", description: "", rawContent: "" }],
+			[{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }],
 		);
 		expect(lanes.map((lane) => lane.milestone)).toContain("m-1");
 		expect(lanes.map((lane) => lane.milestone)).not.toContain("1");
@@ -60,7 +60,7 @@ describe("buildLanes", () => {
 			"milestone",
 			tasks,
 			[],
-			[{ id: "m-1", title: "Release 1", description: "", rawContent: "" }],
+			[{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }],
 		);
 		expect(lanes.map((lane) => lane.milestone)).toContain("m-1");
 		expect(lanes.map((lane) => lane.milestone)).not.toContain("m-01");
@@ -70,7 +70,7 @@ describe("buildLanes", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "1" })];
 		const lanes = buildLanes("milestone", tasks, [], [], {
 			archivedMilestoneIds: ["m-1"],
-			archivedMilestones: [{ id: "m-1", title: "Archived", description: "", rawContent: "" }],
+			archivedMilestones: [{ id: "m-1", title: "Archived", description: "", active: true, rawContent: "" }],
 		});
 		expect(lanes.map((lane) => lane.label)).toEqual(["No milestone"]);
 	});
@@ -81,10 +81,10 @@ describe("buildLanes", () => {
 			"milestone",
 			tasks,
 			[],
-			[{ id: "m-2", title: "Shared", description: "", rawContent: "" }],
+			[{ id: "m-2", title: "Shared", description: "", active: true, rawContent: "" }],
 			{
 				archivedMilestoneIds: ["m-0"],
-				archivedMilestones: [{ id: "m-0", title: "Shared", description: "", rawContent: "" }],
+				archivedMilestones: [{ id: "m-0", title: "Shared", description: "", active: true, rawContent: "" }],
 			},
 		);
 		expect(lanes.map((lane) => lane.milestone)).toContain("m-2");
@@ -98,8 +98,8 @@ describe("buildLanes", () => {
 			tasks,
 			[],
 			[
-				{ id: "m-1", title: "Release 1", description: "", rawContent: "" },
-				{ id: "m-2", title: "1", description: "", rawContent: "" },
+				{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" },
+				{ id: "m-2", title: "1", description: "", active: true, rawContent: "" },
 			],
 		);
 		expect(lanes.map((lane) => lane.milestone)).toContain("m-1");
@@ -141,7 +141,7 @@ describe("groupTasksByLaneAndStatus", () => {
 	});
 
 	it("normalizes numeric aliases for archived milestones to no milestone", () => {
-		const archivedMilestones = [{ id: "m-1", title: "Archived", description: "", rawContent: "" }];
+		const archivedMilestones = [{ id: "m-1", title: "Archived", description: "", active: true, rawContent: "" }];
 		const archivedAliasTasks = [makeTask({ id: "task-1", status: "To Do", milestone: "1" })];
 		const lanes = buildLanes("milestone", archivedAliasTasks, [], []);
 		const grouped = groupTasksByLaneAndStatus("milestone", lanes, ["To Do"], archivedAliasTasks, {
@@ -154,8 +154,8 @@ describe("groupTasksByLaneAndStatus", () => {
 	it("prefers real milestone IDs over numeric title aliases when grouping tasks", () => {
 		const tasksWithNumericTitleCollision = [makeTask({ id: "task-1", status: "To Do", milestone: "1" })];
 		const milestones = [
-			{ id: "m-1", title: "Release 1", description: "", rawContent: "" },
-			{ id: "m-2", title: "1", description: "", rawContent: "" },
+			{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" },
+			{ id: "m-2", title: "1", description: "", active: true, rawContent: "" },
 		];
 		const lanes = buildLanes("milestone", tasksWithNumericTitleCollision, [], milestones);
 		const grouped = groupTasksByLaneAndStatus("milestone", lanes, ["To Do"], tasksWithNumericTitleCollision, {

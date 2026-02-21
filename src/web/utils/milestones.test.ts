@@ -21,14 +21,14 @@ describe("buildMilestoneBuckets", () => {
 	];
 
 	it("returns buckets for file milestones, discovered milestones, and no-milestone", () => {
-		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "In Progress", "Done"]);
 		const labels = buckets.map((b) => b.label);
 		expect(labels).toEqual(["Tasks without milestone", "M1", "M2"]);
 	});
 
 	it("calculates status counts per bucket", () => {
-		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "In Progress", "Done"]);
 		const m1 = buckets.find((b) => b.label === "M1");
 		const none = buckets.find((b) => b.isNoMilestone);
@@ -41,7 +41,7 @@ describe("buildMilestoneBuckets", () => {
 			makeTask({ id: "task-1", milestone: "M1", status: "Done" }),
 			makeTask({ id: "task-2", milestone: "M1", status: "Done" }),
 		];
-		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(completedTasks, milestones, ["To Do", "In Progress", "Done"]);
 		const m1 = buckets.find((b) => b.label === "M1");
 		expect(m1?.isCompleted).toBe(true);
@@ -50,8 +50,8 @@ describe("buildMilestoneBuckets", () => {
 	it("keeps active milestones when archived titles are reused", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "m-2", status: "To Do" })];
 		const milestones: Milestone[] = [
-			{ id: "m-1", title: "Release 1", description: "", rawContent: "" },
-			{ id: "m-2", title: "Release 1", description: "", rawContent: "" },
+			{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" },
+			{ id: "m-2", title: "Release 1", description: "", active: true, rawContent: "" },
 		];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"], {
 			archivedMilestoneIds: ["m-1", "Release 1"],
@@ -65,8 +65,8 @@ describe("buildMilestoneBuckets", () => {
 			makeTask({ id: "task-1", milestone: "Release 1", status: "To Do" }),
 			makeTask({ id: "task-2", milestone: "m-2", status: "Done" }),
 		];
-		const milestones: Milestone[] = [{ id: "m-2", title: "Release 1", description: "", rawContent: "" }];
-		const archivedMilestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "m-2", title: "Release 1", description: "", active: true, rawContent: "" }];
+		const archivedMilestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }];
 
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"], {
 			archivedMilestoneIds: ["m-1"],
@@ -80,7 +80,7 @@ describe("buildMilestoneBuckets", () => {
 
 	it("canonicalizes numeric milestone aliases to milestone IDs", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "1", status: "To Do" })];
-		const milestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"]);
 		const releaseBucket = buckets.find((bucket) => bucket.milestone === "m-1");
 		expect(releaseBucket?.tasks.map((task) => task.id)).toEqual(["task-1"]);
@@ -88,7 +88,7 @@ describe("buildMilestoneBuckets", () => {
 
 	it("canonicalizes zero-padded milestone ID aliases to canonical IDs", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "m-01", status: "To Do" })];
-		const milestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"]);
 		const releaseBucket = buckets.find((bucket) => bucket.milestone === "m-1");
 		expect(releaseBucket?.tasks.map((task) => task.id)).toEqual(["task-1"]);
@@ -96,8 +96,8 @@ describe("buildMilestoneBuckets", () => {
 
 	it("keeps active-title aliases when an archived milestone ID shares the same key", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "m-0", status: "To Do" })];
-		const milestones: Milestone[] = [{ id: "m-2", title: "m-0", description: "", rawContent: "" }];
-		const archivedMilestones: Milestone[] = [{ id: "m-0", title: "Historical", description: "", rawContent: "" }];
+		const milestones: Milestone[] = [{ id: "m-2", title: "m-0", description: "", active: true, rawContent: "" }];
+		const archivedMilestones: Milestone[] = [{ id: "m-0", title: "Historical", description: "", active: true, rawContent: "" }];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"], {
 			archivedMilestones,
 			archivedMilestoneIds: ["m-0"],
@@ -109,8 +109,8 @@ describe("buildMilestoneBuckets", () => {
 	it("prefers real milestone IDs over numeric title aliases", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "1", status: "To Do" })];
 		const milestones: Milestone[] = [
-			{ id: "m-1", title: "Release 1", description: "", rawContent: "" },
-			{ id: "m-2", title: "1", description: "", rawContent: "" },
+			{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" },
+			{ id: "m-2", title: "1", description: "", active: true, rawContent: "" },
 		];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"]);
 		const idBucket = buckets.find((bucket) => bucket.milestone === "m-1");
@@ -126,7 +126,7 @@ describe("collectMilestoneIds", () => {
 		makeTask({ id: "task-2", milestone: "New" }),
 		makeTask({ id: "task-3" }),
 	];
-	const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", rawContent: "" }];
+	const milestones: Milestone[] = [{ id: "M1", title: "M1", description: "", active: true, rawContent: "" }];
 
 	it("merges file milestones and discovered task milestones without duplicates", () => {
 		expect(collectMilestoneIds(tasks, milestones)).toEqual(["M1", "New"]);
