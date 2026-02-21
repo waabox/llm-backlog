@@ -39,11 +39,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # Claude Code session data (exclude session files, keep agents and skills)
-.claude/*
-!.claude/agents
-!.claude/agents/**
-!.claude/skills
-!.claude/skills/**
+claude/*
+!claude/agents
+!claude/agents/**
+!claude/skills
+!claude/skills/**
 
 # Gemini CLI session data
 .gemini
