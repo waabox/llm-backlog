@@ -224,9 +224,7 @@ export async function updateTask(core: Core, task: Task, autoCommit?: boolean): 
 
 	if (milestoneChanged) {
 		const allTasks = await core.fs.listTasks();
-		const subtasks = allTasks.filter(
-			(t) => t.parentTaskId !== undefined && taskIdsEqual(t.parentTaskId, task.id),
-		);
+		const subtasks = allTasks.filter((t) => t.parentTaskId !== undefined && taskIdsEqual(t.parentTaskId, task.id));
 		for (const subtask of subtasks) {
 			subtask.milestone = task.milestone;
 			await updateTask(core, subtask, autoCommit);
