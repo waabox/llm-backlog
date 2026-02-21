@@ -40,18 +40,12 @@ backlog/tasks/back-42 - Add payment webhook handler.md
 | Section | For whom | Purpose |
 |---|---|---|
 | **Description** | Human + AI | What needs to be done and why. The better this is written, the better the AI output. |
-| **Acceptance Criteria** | Human + AI | Concrete, checkable conditions that define "done". Each item is a checkbox. |
-| **Definition of Done** | Human + AI | Project-wide quality checklist applied to every task. |
 | **Implementation Plan** | AI | Written by the AI before coding. Describes the approach. Review and approve before the AI proceeds. |
-| **Implementation Notes** | AI | Running notes the AI adds while working. Observations, decisions made, dead ends. |
 | **Final Summary** | AI | Written by the AI when the task is complete. A PR-style summary of what changed and why. |
 
 ### A well-written task
 
-Description and Acceptance Criteria are the most important parts. They are the contract between the person who wants the work done and the person (or AI) doing it.
-
-- **Description**: explain the problem and the desired outcome. Give enough context that someone unfamiliar with the codebase could understand what is being asked.
-- **Acceptance Criteria**: list every condition that must be true before the task can be closed. Make each item verifiable — not "works correctly" but "clicking Save persists the record to the database and shows a success toast."
+The description is the contract between the person who wants the work done and the person (or AI) doing it. Explain the problem and the desired outcome. Give enough context that someone unfamiliar with the codebase could understand what is being asked.
 
 A vague task produces vague results. A precise task produces precise results.
 
