@@ -2,6 +2,7 @@ import React from 'react';
 import { type Task } from '../../types';
 import type { ReorderTaskPayload } from '../lib/api';
 import TaskCard from './TaskCard';
+import { getStatusBadgeClass } from '../lib/status-helpers';
 
 interface TaskColumnProps {
   title: string;
@@ -35,19 +36,6 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
   const [isDragOver, setIsDragOver] = React.useState(false);
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null);
   const [dropPosition, setDropPosition] = React.useState<{ index: number; position: 'before' | 'after' } | null>(null);
-  const getStatusBadgeClass = (status: string) => {
-    const statusLower = status.toLowerCase();
-    if (statusLower.includes('done') || statusLower.includes('complete')) {
-      return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 transition-colors duration-200';
-    }
-    if (statusLower.includes('progress') || statusLower.includes('doing')) {
-      return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 transition-colors duration-200';
-    }
-    if (statusLower.includes('blocked') || statusLower.includes('stuck')) {
-      return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 transition-colors duration-200';
-    }
-    return 'bg-stone-100 dark:bg-stone-900 text-stone-800 dark:text-stone-200 transition-colors duration-200';
-  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();

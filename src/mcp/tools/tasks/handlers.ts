@@ -10,6 +10,7 @@ import type { TaskEditArgs, TaskEditRequest } from "../../../types/task-edit-arg
 import { buildTaskUpdateInput } from "../../../utils/task-edit-builder.ts";
 import { createTaskSearchIndex } from "../../../utils/task-search.ts";
 import { sortTasks } from "../../../utils/task-sorting.ts";
+import { isDoneStatus } from "../../../web/lib/status-helpers.ts";
 import { McpError } from "../../errors/mcp-errors.ts";
 import type { McpServer } from "../../server.ts";
 import type { CallToolResult } from "../../types.ts";
@@ -47,11 +48,6 @@ export type TaskSearchArgs = {
 
 export class TaskHandlers {
 	constructor(private readonly core: McpServer) {}
-
-	private isDoneStatus(status?: string | null): boolean {
-		const normalized = (status ?? "").trim().toLowerCase();
-		return normalized.includes("done") || normalized.includes("complete");
-	}
 
 	private isDraftStatus(status?: string | null): boolean {
 		return (status ?? "").trim().toLowerCase() === "draft";
@@ -353,7 +349,7 @@ export class TaskHandlers {
 			throw new McpError(`Cannot archive task from another branch: ${task.id}`, "VALIDATION_ERROR");
 		}
 
-		if (this.isDoneStatus(task.status)) {
+		if (isDoneStatus(task.status)) {
 			throw new McpError(
 				`Task ${task.id} is Done. Done tasks should be completed (moved to the completed folder), not archived. Use task_complete instead.`,
 				"VALIDATION_ERROR",
@@ -376,7 +372,7 @@ export class TaskHandlers {
 			throw new McpError(`Cannot complete task from another branch: ${task.id}`, "VALIDATION_ERROR");
 		}
 
-		if (!this.isDoneStatus(task.status)) {
+		if (!isDoneStatus(task.status)) {
 			throw new McpError(
 				`Task ${task.id} is not Done. Set status to "Done" with task_edit before completing it.`,
 				"VALIDATION_ERROR",

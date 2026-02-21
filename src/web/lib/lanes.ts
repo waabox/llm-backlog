@@ -5,6 +5,7 @@ import {
 	getMilestoneLabel,
 	milestoneKey,
 } from "../utils/milestones";
+import { isDoneStatus } from "./status-helpers";
 
 export type LaneMode = "none" | "milestone";
 
@@ -77,7 +78,7 @@ export function buildLanes(
 }
 
 export function sortTasksForStatus(tasks: Task[], status: string): Task[] {
-	const isDoneStatus = status.toLowerCase().includes("done") || status.toLowerCase().includes("complete");
+	const isDone = isDoneStatus(status);
 
 	return tasks.slice().sort((a, b) => {
 		// Tasks with ordinal come before tasks without
@@ -93,7 +94,7 @@ export function sortTasksForStatus(tasks: Task[], status: string): Task[] {
 			return a.ordinal - b.ordinal;
 		}
 
-		if (isDoneStatus) {
+		if (isDone) {
 			const aDate = a.updatedDate || a.createdDate;
 			const bDate = b.updatedDate || b.createdDate;
 			return bDate.localeCompare(aDate);
