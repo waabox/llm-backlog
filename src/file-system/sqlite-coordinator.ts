@@ -172,7 +172,7 @@ export class SqliteCoordinator {
 				        t.milestone, t.priority, t.parent_id, t.updated_date, t.file_path
 				 FROM task_index t
 				 JOIN fts_tasks fts ON fts.id = t.id
-				 WHERE fts_tasks MATCH ?
+				 WHERE fts MATCH ?
 				 ORDER BY rank`,
 			)
 			.all(query);
@@ -232,7 +232,7 @@ export class SqliteCoordinator {
 		return result;
 	}
 
-	private recalculateSequences(): void {
+	recalculateSequences(): void {
 		for (const entityType of Object.keys(ENTITY_PREFIXES)) {
 			const prefix = ENTITY_PREFIXES[entityType] ?? entityType.toUpperCase();
 			const row = this.db
@@ -243,9 +243,7 @@ export class SqliteCoordinator {
 				.get(prefix, entityType, prefix);
 
 			if (row?.max_val != null) {
-				this.db
-					.prepare("UPDATE sequences SET current_val = ? WHERE entity_type = ? AND current_val < ?")
-					.run(row.max_val, entityType, row.max_val);
+				this.db.prepare("UPDATE sequences SET current_val = ? WHERE entity_type = ?").run(row.max_val, entityType);
 			}
 		}
 	}
