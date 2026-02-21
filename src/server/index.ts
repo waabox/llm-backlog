@@ -3,7 +3,8 @@ import type { Server, ServerWebSocket } from "bun";
 import { $ } from "bun";
 import { Core } from "../core/backlog.ts";
 import type { ContentStore } from "../core/content-store.ts";
-import { FileSystem } from "../file-system/operations.ts";
+import type { FileSystem } from "../file-system/operations.ts";
+import { StorageCoordinator } from "../file-system/storage-coordinator.ts";
 import { GitOperations } from "../git/operations.ts";
 import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
 import { watchConfig } from "../utils/config-watcher.ts";
@@ -75,7 +76,7 @@ export class BacklogServer {
 	constructor(projectPath: string) {
 		this.projectRepoUrl = process.env.BACKLOG_PROJECT_REPO ?? null;
 		if (!this.projectRepoUrl) {
-			this.sharedFs = new FileSystem(projectPath);
+			this.sharedFs = new StorageCoordinator(projectPath);
 			this.sharedGit = new GitOperations(projectPath);
 			this.core = new Core(projectPath, {
 				enableWatchers: true,
@@ -162,7 +163,7 @@ export class BacklogServer {
 			console.log(`Cloning project repo: ${this.projectRepoUrl}`);
 			this.projectRepoService = new ProjectRepoService(this.projectRepoUrl);
 			await this.projectRepoService.start();
-			this.sharedFs = new FileSystem(this.projectRepoService.dir);
+			this.sharedFs = new StorageCoordinator(this.projectRepoService.dir);
 			this.sharedGit = new GitOperations(this.projectRepoService.dir);
 			this.core = new Core(this.projectRepoService.dir, {
 				enableWatchers: true,

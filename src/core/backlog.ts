@@ -286,7 +286,7 @@ export class Core {
 	 * - Decision: /decisions only
 	 */
 	async generateNextId(type: EntityType = EntityType.Task, parent?: string): Promise<string> {
-		if (this.fs instanceof StorageCoordinator && type !== EntityType.Document) {
+		if (this.fs instanceof StorageCoordinator && type !== EntityType.Document && !parent) {
 			return this.fs.nextId(type);
 		}
 		return generateNextId(this, type, parent);

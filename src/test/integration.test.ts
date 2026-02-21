@@ -953,12 +953,8 @@ describe("SQLite coordination layer", () => {
 	test("backlog_sync tool responds with 200 and a sync message", async () => {
 		const body = await mcpToolCall(env, "backlog_sync", {});
 		const text = body.result.content[0].text;
-		// The server uses plain FileSystem (not StorageCoordinator), so the tool
-		// reports that the SQLite layer is not active rather than actual sync counts.
-		expect(text.length).toBeGreaterThan(0);
-		expect(
-			text.includes("Sync complete") || text.includes("SQLite coordination layer is not active"),
-		).toBe(true);
+		expect(text).toContain("Sync complete");
+		expect(text).toContain("Tasks:");
 	});
 
 	test("sequential task creates produce unique IDs", async () => {
