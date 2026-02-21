@@ -446,7 +446,22 @@ export class BacklogServer {
 			};
 			this.server = Bun.serve(serveOptions as unknown as Parameters<typeof Bun.serve>[0]);
 
-			const url = `http://localhost:${finalPort}`;
+			if (this.server.port !== finalPort) {
+				console.error(`\n❌ Error: Port ${finalPort} is already in use.\n`);
+				console.log("💡 Suggestions:");
+				console.log(`   1. Try a different port: backlog browser --port ${finalPort + 1}`);
+				console.log(`   2. Find what's using port ${finalPort}:`);
+				if (process.platform === "darwin" || process.platform === "linux") {
+					console.log(`      Run: lsof -i :${finalPort}`);
+				} else if (process.platform === "win32") {
+					console.log(`      Run: netstat -ano | findstr :${finalPort}`);
+				}
+				console.log("   3. Or kill the process using the port and try again\n");
+				await this.server.stop();
+				process.exit(1);
+			}
+
+			const url = `http://localhost:${this.server.port}`;
 			console.log(`🚀 Backlog.md browser interface running at ${url}`);
 			console.log(`🔌 MCP endpoint: ${url}/mcp`);
 			console.log(`📊 Project: ${this.projectName}`);
