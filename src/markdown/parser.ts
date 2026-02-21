@@ -218,6 +218,8 @@ export function parseMilestone(content: string): Milestone {
 		id: String(frontmatter.id || ""),
 		title: String(frontmatter.title || ""),
 		description: extractSection(rawContent, "Description") || "",
+		// Missing field defaults to true for backwards compatibility with existing milestone files.
+		active: frontmatter.active !== undefined ? Boolean(frontmatter.active) : true,
 		rawContent,
 	};
 }

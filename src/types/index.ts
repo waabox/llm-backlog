@@ -138,6 +138,7 @@ export interface Milestone {
 	id: string;
 	title: string;
 	description: string;
+	active: boolean;
 	readonly rawContent: string; // Raw markdown content without frontmatter
 }
 
