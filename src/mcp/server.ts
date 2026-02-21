@@ -41,7 +41,7 @@ import type {
 const APP_NAME = getPackageName();
 const APP_VERSION = await getVersion();
 const INSTRUCTIONS_NORMAL =
-	"At the beginning of each session, read the backlog://workflow/overview resource to understand when and how to use Backlog.md for task management. Additional detailed guides are available as resources when needed.";
+	"At the beginning of each session, read the backlog://workflow/overview resource to understand when and how to use Backlog.md for task management.";
 const INSTRUCTIONS_FALLBACK =
 	"Backlog.md is not initialized in this directory. Read the backlog://init-required resource for setup instructions.";
 

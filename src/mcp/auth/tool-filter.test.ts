@@ -24,9 +24,6 @@ describe("isReadOnlyTool", () => {
 
 	it("classifies workflow tools as read-only", () => {
 		expect(isReadOnlyTool("get_workflow_overview")).toBe(true);
-		expect(isReadOnlyTool("get_task_creation_guide")).toBe(true);
-		expect(isReadOnlyTool("get_task_execution_guide")).toBe(true);
-		expect(isReadOnlyTool("get_task_finalization_guide")).toBe(true);
 	});
 
 	it("classifies create/edit/archive/complete/update/add/rename/remove tools as write", () => {
