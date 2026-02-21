@@ -1027,3 +1027,66 @@ describe("SQLite coordination layer", () => {
 		expect(text.length).toBeGreaterThan(0);
 	});
 });
+
+// ── Milestone cascade to subtasks ────────────────────────────────────────────
+
+describe("milestone cascade to subtasks", () => {
+	let env: TestEnv;
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	test("updating a task's milestone cascades to its subtasks", async () => {
+		// Create two milestones
+		const m1Res = await fetch(`${env.baseUrl}/api/milestones`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Sprint Alpha" }),
+		});
+		expect(m1Res.status).toBe(201);
+
+		const m2Res = await fetch(`${env.baseUrl}/api/milestones`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Sprint Beta" }),
+		});
+		expect(m2Res.status).toBe(201);
+
+		// Create parent task with milestone Sprint Alpha
+		const parentRes = await fetch(`${env.baseUrl}/api/tasks`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Parent Task", milestone: "Sprint Alpha" }),
+		});
+		expect(parentRes.status).toBe(201);
+		const parent = await parentRes.json();
+
+		// Create subtask under parent with same milestone
+		const subtaskRes = await fetch(`${env.baseUrl}/api/tasks`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Subtask One", parentTaskId: parent.id, milestone: "Sprint Alpha" }),
+		});
+		expect(subtaskRes.status).toBe(201);
+		const subtask = await subtaskRes.json();
+
+		// Move parent to Sprint Beta
+		const updateRes = await fetch(`${env.baseUrl}/api/tasks/${parent.id}`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ milestone: "Sprint Beta" }),
+		});
+		expect(updateRes.status).toBe(200);
+
+		// Verify subtask was moved to Sprint Beta as well
+		const subtaskAfterRes = await fetch(`${env.baseUrl}/api/tasks/${subtask.id}`, {
+			headers: env.adminHeaders,
+		});
+		expect(subtaskAfterRes.status).toBe(200);
+		const subtaskAfter = await subtaskAfterRes.json();
+		expect(subtaskAfter.milestone).toBe("Sprint Beta");
+	});
+});
