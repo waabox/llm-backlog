@@ -119,13 +119,18 @@ const Board: React.FC<BoardProps> = ({
     }, 4000);
   };
 
+  const activeMilestoneEntities = useMemo(
+    () => milestoneEntities.filter((m) => m.active),
+    [milestoneEntities],
+  );
+
   // Use all tasks for building lanes (so we can show/collapse other milestones)
   const lanes = useMemo(
-    () => buildLanes(laneMode, tasks, milestoneEntities.map((milestone) => milestone.id), milestoneEntities, {
+    () => buildLanes(laneMode, tasks, activeMilestoneEntities.map((milestone) => milestone.id), activeMilestoneEntities, {
       archivedMilestoneIds,
       archivedMilestones,
     }),
-    [laneMode, tasks, milestoneEntities, archivedMilestoneIds, archivedMilestones]
+    [laneMode, tasks, activeMilestoneEntities, archivedMilestoneIds, archivedMilestones]
   );
 
   // Check if any tasks actually have milestones assigned
