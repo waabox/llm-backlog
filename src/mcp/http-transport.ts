@@ -70,9 +70,13 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 	const { projectRoot, authEnabled, findUserByApiKey, debug, autoPush, filesystem, gitOperations } = options;
 
 	const mcpServer = await createMcpServer(projectRoot, { debug, filesystem, gitOperations });
-	// Eagerly initialize ContentStore so the patch chain with the Web's ContentStore
-	// is established before the first MCP request arrives.
-	await mcpServer.getContentStore();
+	// Eagerly initialize ContentStore so filesystem write methods are patched before
+	// the first MCP request arrives. Skip in fallback mode (backlog not initialized)
+	// to avoid silently creating the directory structure on disk.
+	const mcpConfig = await mcpServer.fs.loadConfig();
+	if (mcpConfig) {
+		await mcpServer.getContentStore();
+	}
 	if (autoPush) {
 		mcpServer.git.setAutoPush(true);
 		mcpServer.setAutoCommitOverride(true);
