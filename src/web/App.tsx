@@ -270,6 +270,14 @@ function AppRoutes() {
     setShowModal(true);
   }, []);
 
+  const handleOpenParentTask = useCallback((parentId: string) => {
+    const parent = tasks.find((t) => t.id === parentId);
+    if (parent) {
+      setPendingParentTaskId(null);
+      handleOpenTask(parent);
+    }
+  }, [tasks, handleOpenTask]);
+
   const handleEditTask = (task: Task) => {
     navigate(`/tasks/${task.id}`);
   };
@@ -538,6 +546,7 @@ function AppRoutes() {
         archivedMilestoneEntities={archivedMilestones}
         onOpenTask={handleOpenTask}
         onAddSubtask={handleAddSubtask}
+        onOpenParentTask={handleOpenParentTask}
         parentTaskId={pendingParentTaskId ?? undefined}
       />
 

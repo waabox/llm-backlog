@@ -27,6 +27,7 @@ interface Props {
   onOpenTask?: (task: Task) => void;
   onAddSubtask?: (parentId: string) => void;
   parentTaskId?: string; // Set in create mode when creating a subtask
+  onOpenParentTask?: (parentId: string) => void;
 }
 
 type Mode = "preview" | "edit" | "create";
@@ -57,10 +58,23 @@ export const TaskDetailsModal: React.FC<Props> = ({
   onOpenTask,
   onAddSubtask,
   parentTaskId,
+  onOpenParentTask,
 }) => {
   const { theme } = useTheme();
   const isCreateMode = !task;
   const isFromOtherBranch = Boolean(task?.branch);
+
+  // Derive parent ID from dot-notation task ID (e.g. task-1.1 → task-1)
+  // for subtasks that predate the parent_task_id frontmatter field
+  const derivedParentId = (() => {
+    const id = task?.id;
+    if (!id) return undefined;
+    const dashIdx = id.lastIndexOf("-");
+    if (dashIdx === -1) return undefined;
+    const body = id.slice(dashIdx + 1);
+    if (!body.includes(".")) return undefined;
+    return `${id.slice(0, dashIdx)}-${body.split(".")[0]}`;
+  })();
   const [mode, setMode] = useState<Mode>(isCreateMode ? "create" : "preview");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -351,6 +365,23 @@ export const TaskDetailsModal: React.FC<Props> = ({
         </div>
       }
     >
+      {/* Back to parent button */}
+      {(() => {
+        const effectiveParentId = task?.parentTaskId ?? derivedParentId ?? (isCreateMode ? parentTaskId : undefined);
+if (!effectiveParentId || !onOpenParentTask) return null;
+        return (
+          <button
+            onClick={() => onOpenParentTask(effectiveParentId)}
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to {effectiveParentId.toUpperCase()}
+          </button>
+        );
+      })()}
+
       {error && (
         <div className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}

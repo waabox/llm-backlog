@@ -58,7 +58,8 @@ export class UsersStore {
 				continue;
 			}
 
-			const role: "admin" | "viewer" = entry.role === "admin" ? "admin" : "viewer";
+			const role: "admin" | "viewer" =
+				typeof entry.role === "string" && entry.role.toLowerCase() === "admin" ? "admin" : "viewer";
 			const apiKey = typeof entry.apiKey === "string" ? entry.apiKey.trim() : "";
 
 			const user: AuthUser = { email, name, role, ...(apiKey.length > 0 ? { apiKey } : {}) };
