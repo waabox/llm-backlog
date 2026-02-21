@@ -87,6 +87,31 @@ export async function handleCreateMilestone(req: Request, core: Core): Promise<R
 	}
 }
 
+export async function handleSetMilestoneActive(
+	milestoneId: string,
+	req: Request,
+	core: Core,
+	broadcast: () => void,
+): Promise<Response> {
+	try {
+		const body = (await req.json()) as { active?: unknown };
+		if (typeof body.active !== "boolean") {
+			return Response.json({ error: "active must be a boolean" }, { status: 400 });
+		}
+
+		const result = await core.setMilestoneActive(milestoneId, body.active);
+		if (!result.success) {
+			return Response.json({ error: "Milestone not found" }, { status: 404 });
+		}
+		broadcast();
+		return Response.json({ success: true, milestone: result.milestone ?? null });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Failed to update milestone";
+		console.error("Error setting milestone active:", error);
+		return Response.json({ error: message }, { status: 500 });
+	}
+}
+
 export async function handleArchiveMilestone(
 	milestoneId: string,
 	core: Core,

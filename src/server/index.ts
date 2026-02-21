@@ -36,6 +36,7 @@ import { handleInit } from "./routes/init.ts";
 import {
 	handleArchiveMilestone,
 	handleCreateMilestone,
+	handleSetMilestoneActive,
 	handleGetMilestone,
 	handleListArchivedMilestones,
 	handleListMilestones,
@@ -361,6 +362,12 @@ export class BacklogServer {
 						POST: this.protect(
 							async (req: Request & { params: { id: string } }) =>
 								await handleArchiveMilestone(req.params.id, this.core, () => this.broadcastTasksUpdated()),
+						),
+					},
+					"/api/milestones/:id/active": {
+						PUT: this.protect(
+							async (req: Request & { params: { id: string } }) =>
+								await handleSetMilestoneActive(req.params.id, req, this.core, () => this.broadcastTasksUpdated()),
 						),
 					},
 					"/api/tasks/reorder": {

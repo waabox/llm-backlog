@@ -500,6 +500,19 @@ export class ApiClient {
 		return response.json();
 	}
 
+	async setMilestoneActive(id: string, active: boolean): Promise<{ success: boolean; milestone?: Milestone | null }> {
+		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}/active`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json", ...this.authHeaders() },
+			body: JSON.stringify({ active }),
+		});
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.error || "Failed to update milestone");
+		}
+		return data;
+	}
+
 	async fetchStatistics(): Promise<
 		TaskStatistics & { statusCounts: Record<string, number>; priorityCounts: Record<string, number> }
 	> {
