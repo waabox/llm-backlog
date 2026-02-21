@@ -976,7 +976,7 @@ describe("subtask bidirectional navigation", () => {
 
 		// Read the parent task file from disk and verify the subtasks frontmatter array contains the subtask ID.
 		// This validates bidirectional navigation at the file level, not just the dynamic view-time lookup.
-		const parentTaskDir = join(env.projectDir, "backlog", "tasks", parentId);
+		const parentTaskDir = join(env.projectDir, "backlog", "tasks", parentId.toLowerCase());
 		const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: parentTaskDir }));
 		expect(files).toHaveLength(1);
 		const parentFilePath = join(parentTaskDir, files[0] as string);

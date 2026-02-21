@@ -614,6 +614,8 @@ export class ContentStore {
 		const originalSaveTask = this.filesystem.saveTask;
 		const originalSaveDocument = this.filesystem.saveDocument;
 		const originalSaveDecision = this.filesystem.saveDecision;
+		const originalCompleteTask = this.filesystem.completeTask;
+		const originalArchiveTask = this.filesystem.archiveTask;
 
 		this.filesystem.saveTask = (async (task: Task): Promise<string> => {
 			const result = await originalSaveTask.call(this.filesystem, task);
@@ -632,10 +634,34 @@ export class ContentStore {
 			await this.handleDecisionWrite(decision.id);
 		}) as FileSystem["saveDecision"];
 
+		this.filesystem.completeTask = (async (taskId: string): Promise<boolean> => {
+			const result = await originalCompleteTask.call(this.filesystem, taskId);
+			if (result && this.initialized) {
+				const normalizedId = normalizeTaskId(taskId);
+				this.tasks.delete(normalizedId);
+				this.cachedTasks = sortByTaskId(Array.from(this.tasks.values()));
+				this.notify("tasks");
+			}
+			return result;
+		}) as FileSystem["completeTask"];
+
+		this.filesystem.archiveTask = (async (taskId: string): Promise<boolean> => {
+			const result = await originalArchiveTask.call(this.filesystem, taskId);
+			if (result && this.initialized) {
+				const normalizedId = normalizeTaskId(taskId);
+				this.tasks.delete(normalizedId);
+				this.cachedTasks = sortByTaskId(Array.from(this.tasks.values()));
+				this.notify("tasks");
+			}
+			return result;
+		}) as FileSystem["archiveTask"];
+
 		this.restoreFilesystemPatch = () => {
 			this.filesystem.saveTask = originalSaveTask;
 			this.filesystem.saveDocument = originalSaveDocument;
 			this.filesystem.saveDecision = originalSaveDecision;
+			this.filesystem.completeTask = originalCompleteTask;
+			this.filesystem.archiveTask = originalArchiveTask;
 		};
 	}
 
