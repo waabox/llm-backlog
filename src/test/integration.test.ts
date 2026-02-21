@@ -770,17 +770,27 @@ describe("MCP — task_move", () => {
 		// task-1 has no assignee; admin requests status "Done" but should be forced to "In Progress"
 		const res = await mcpMove("task-1", "Done");
 		expect(res.status).toBe(200);
-		const body = await res.text();
-		expect(body).toContain("Admin User");
-		expect(body.toLowerCase()).toContain("in progress");
+		const viewRes = await fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: { ...env.adminHeaders, Accept: "application/json, text/event-stream" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "task_view", arguments: { id: "task-1" } } }),
+		});
+		const viewBody = await viewRes.text();
+		expect(viewBody).toContain("Admin User");
+		expect(viewBody.toLowerCase()).toContain("in progress");
 	});
 
 	test("task_move sets requested status when caller is already the assignee", async () => {
 		// task-1 is now assigned to Admin User from previous test
 		const res = await mcpMove("task-1", "Done");
 		expect(res.status).toBe(200);
-		const body = await res.text();
-		expect(body.toLowerCase()).toContain("done");
+		const viewRes = await fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: { ...env.adminHeaders, Accept: "application/json, text/event-stream" },
+			body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "task_view", arguments: { id: "task-1" } } }),
+		});
+		const viewBody = await viewRes.text();
+		expect(viewBody.toLowerCase()).toContain("done");
 	});
 });
 

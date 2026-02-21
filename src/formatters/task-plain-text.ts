@@ -35,6 +35,11 @@ export function formatTaskPlainText(task: Task, options: TaskPlainTextOptions = 
 	const lines: string[] = [];
 
 	lines.push(`Task ${task.id} - ${task.title}`);
+
+	if (options.compact) {
+		return lines.join("\n");
+	}
+
 	lines.push("=".repeat(50));
 	lines.push("");
 	lines.push(`Status: ${formatStatusWithIcon(task.status)}`);
@@ -96,29 +101,27 @@ export function formatTaskPlainText(task: Task, options: TaskPlainTextOptions = 
 		lines.push(`Documentation: ${task.documentation.join(", ")}`);
 	}
 
-	if (!options.compact) {
-		lines.push("");
-		lines.push("Description:");
+	lines.push("");
+	lines.push("Description:");
+	lines.push("-".repeat(50));
+	const description = task.description?.trim();
+	lines.push(transformCodePathsPlain(description && description.length > 0 ? description : "No description provided"));
+	lines.push("");
+
+	const implementationPlan = task.implementationPlan?.trim();
+	if (implementationPlan) {
+		lines.push("Implementation Plan:");
 		lines.push("-".repeat(50));
-		const description = task.description?.trim();
-		lines.push(transformCodePathsPlain(description && description.length > 0 ? description : "No description provided"));
+		lines.push(transformCodePathsPlain(implementationPlan));
 		lines.push("");
+	}
 
-		const implementationPlan = task.implementationPlan?.trim();
-		if (implementationPlan) {
-			lines.push("Implementation Plan:");
-			lines.push("-".repeat(50));
-			lines.push(transformCodePathsPlain(implementationPlan));
-			lines.push("");
-		}
-
-		const finalSummary = task.finalSummary?.trim();
-		if (finalSummary) {
-			lines.push("Final Summary:");
-			lines.push("-".repeat(50));
-			lines.push(transformCodePathsPlain(finalSummary));
-			lines.push("");
-		}
+	const finalSummary = task.finalSummary?.trim();
+	if (finalSummary) {
+		lines.push("Final Summary:");
+		lines.push("-".repeat(50));
+		lines.push(transformCodePathsPlain(finalSummary));
+		lines.push("");
 	}
 
 	return lines.join("\n");
