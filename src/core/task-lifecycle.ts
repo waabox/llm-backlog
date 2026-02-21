@@ -160,7 +160,9 @@ export async function createTask(core: Core, task: Task, autoCommit?: boolean): 
 				parentFilePath = await core.fs.saveTask(updatedParent);
 				if (core.contentStore) {
 					const reloaded = await core.fs.loadTask(parent.id);
-					if (reloaded) core.contentStore.upsertTask(reloaded);
+					if (reloaded) {
+						core.contentStore.upsertTask(reloaded);
+					}
 				}
 			}
 		}
