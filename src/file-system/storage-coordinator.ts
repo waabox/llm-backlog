@@ -117,9 +117,14 @@ export class StorageCoordinator extends FileSystem {
 
 	/**
 	 * Full-text search across all tasks using FTS5.
+	 * Returns an empty array if the query is malformed and SQLite throws a parse error.
 	 */
 	searchContent(query: string): Task[] {
-		return this.sqlite.searchTasks(query);
+		try {
+			return this.sqlite.searchTasks(query);
+		} catch {
+			return [];
+		}
 	}
 
 	/**
