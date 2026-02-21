@@ -72,7 +72,7 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 	const mcpServer = await createMcpServer(projectRoot, { debug, filesystem, gitOperations });
 	// Eagerly initialize ContentStore so filesystem write methods are patched before
 	// the first MCP request arrives. Skip in fallback mode (backlog not initialized)
-	// to avoid silently creating the directory structure on disk.
+	// to avoid I/O errors against missing task directories.
 	const mcpConfig = await mcpServer.fs.loadConfig();
 	if (mcpConfig) {
 		await mcpServer.getContentStore();
