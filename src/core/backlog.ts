@@ -3,7 +3,6 @@ import { DEFAULT_DIRECTORIES, DEFAULT_STATUSES } from "../constants/index.ts";
 import { FileSystem } from "../file-system/operations.ts";
 import { GitOperations } from "../git/operations.ts";
 import {
-	type AcceptanceCriterion,
 	type BacklogConfig,
 	type Decision,
 	type Document,
@@ -19,12 +18,6 @@ import {
 	getCanonicalStatus as resolveCanonicalStatus,
 	getValidStatuses as resolveValidStatuses,
 } from "../utils/status.ts";
-import {
-	addAcceptanceCriteria,
-	checkAcceptanceCriteria,
-	listAcceptanceCriteria,
-	removeAcceptanceCriteria,
-} from "./acceptance-criteria.ts";
 import {
 	archiveDraft,
 	archiveMilestone,
@@ -300,9 +293,7 @@ export class Core {
 			priority?: "high" | "medium" | "low";
 			// First-party structured fields from Web UI / CLI
 			description?: string;
-			acceptanceCriteriaItems?: import("../types/index.ts").AcceptanceCriterion[];
 			implementationPlan?: string;
-			implementationNotes?: string;
 			finalSummary?: string;
 			milestone?: string;
 		},
@@ -429,42 +420,6 @@ export class Core {
 
 	async demoteTask(taskId: string, autoCommit?: boolean): Promise<boolean> {
 		return demoteTask(this, taskId, autoCommit);
-	}
-
-	/**
-	 * Add acceptance criteria to a task
-	 */
-	async addAcceptanceCriteria(taskId: string, criteria: string[], autoCommit?: boolean): Promise<void> {
-		return addAcceptanceCriteria(this, taskId, criteria, autoCommit);
-	}
-
-	/**
-	 * Remove acceptance criteria by indices (supports batch operations)
-	 * @returns Array of removed indices
-	 */
-	async removeAcceptanceCriteria(taskId: string, indices: number[], autoCommit?: boolean): Promise<number[]> {
-		return removeAcceptanceCriteria(this, taskId, indices, autoCommit);
-	}
-
-	/**
-	 * Check or uncheck acceptance criteria by indices (supports batch operations)
-	 * Silently ignores invalid indices and only updates valid ones.
-	 * @returns Array of updated indices
-	 */
-	async checkAcceptanceCriteria(
-		taskId: string,
-		indices: number[],
-		checked: boolean,
-		autoCommit?: boolean,
-	): Promise<number[]> {
-		return checkAcceptanceCriteria(this, taskId, indices, checked, autoCommit);
-	}
-
-	/**
-	 * List all acceptance criteria for a task
-	 */
-	async listAcceptanceCriteria(taskId: string): Promise<AcceptanceCriterion[]> {
-		return listAcceptanceCriteria(this, taskId);
 	}
 
 	async createDecision(decision: Decision, autoCommit?: boolean): Promise<void> {

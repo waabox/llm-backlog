@@ -11,18 +11,6 @@ export enum EntityType {
 	Decision = "decision",
 }
 
-// Structured Acceptance Criterion (domain-level)
-export interface AcceptanceCriterion {
-	index: number; // 1-based
-	text: string;
-	checked: boolean;
-}
-
-export interface AcceptanceCriterionInput {
-	text: string;
-	checked?: boolean;
-}
-
 export interface Task {
 	id: string;
 	title: string;
@@ -39,12 +27,7 @@ export interface Task {
 	readonly rawContent?: string; // Raw markdown content without frontmatter (read-only: do not modify directly)
 	description?: string;
 	implementationPlan?: string;
-	implementationNotes?: string;
 	finalSummary?: string;
-	/** Structured acceptance criteria parsed from body (checked state + text + index) */
-	acceptanceCriteriaItems?: AcceptanceCriterion[];
-	/** Structured Definition of Done checklist parsed from body (checked state + text + index) */
-	definitionOfDoneItems?: AcceptanceCriterion[];
 	parentTaskId?: string;
 	parentTaskTitle?: string;
 	subtasks?: string[];
@@ -98,11 +81,7 @@ export interface TaskCreateInput {
 	documentation?: string[];
 	parentTaskId?: string;
 	implementationPlan?: string;
-	implementationNotes?: string;
 	finalSummary?: string;
-	acceptanceCriteria?: AcceptanceCriterionInput[];
-	definitionOfDoneAdd?: string[];
-	disableDefinitionOfDoneDefaults?: boolean;
 	rawContent?: string;
 }
 
@@ -129,21 +108,9 @@ export interface TaskUpdateInput {
 	implementationPlan?: string;
 	appendImplementationPlan?: string[];
 	clearImplementationPlan?: boolean;
-	implementationNotes?: string;
-	appendImplementationNotes?: string[];
-	clearImplementationNotes?: boolean;
 	finalSummary?: string;
 	appendFinalSummary?: string[];
 	clearFinalSummary?: boolean;
-	acceptanceCriteria?: AcceptanceCriterionInput[];
-	addAcceptanceCriteria?: Array<AcceptanceCriterionInput | string>;
-	removeAcceptanceCriteria?: number[];
-	checkAcceptanceCriteria?: number[];
-	uncheckAcceptanceCriteria?: number[];
-	addDefinitionOfDone?: Array<AcceptanceCriterionInput | string>;
-	removeDefinitionOfDone?: number[];
-	checkDefinitionOfDone?: number[];
-	uncheckDefinitionOfDone?: number[];
 	rawContent?: string;
 }
 
@@ -260,7 +227,6 @@ export interface BacklogConfig {
 	labels: string[];
 	/** @deprecated Milestones are sourced from milestone files, not config. */
 	milestones?: string[];
-	definitionOfDone?: string[];
 	defaultStatus?: string;
 	dateFormat: string;
 	maxColumnWidth?: number;

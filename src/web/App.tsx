@@ -304,7 +304,6 @@ function AppRoutes() {
   }, [loadAllData]);
 
   // Sync editingTask with refreshed tasks data to prevent stale state
-  // This fixes the bug where acceptance criteria disappears after save (GitHub #467)
   useEffect(() => {
     if (editingTask && showModal) {
       const updatedTask = tasks.find(t => t.id === editingTask.id);
@@ -537,7 +536,6 @@ function AppRoutes() {
         availableMilestones={milestones}
         milestoneEntities={milestoneEntities}
         archivedMilestoneEntities={archivedMilestones}
-        definitionOfDoneDefaults={config?.definitionOfDone ?? []}
         onOpenTask={handleOpenTask}
         onAddSubtask={handleAddSubtask}
         parentTaskId={pendingParentTaskId ?? undefined}

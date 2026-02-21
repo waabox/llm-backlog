@@ -24,9 +24,6 @@ export type TaskCreateArgs = {
 	status?: string;
 	milestone?: string;
 	parentTaskId?: string;
-	acceptanceCriteria?: string[];
-	definitionOfDoneAdd?: string[];
-	disableDefinitionOfDoneDefaults?: boolean;
 	dependencies?: string[];
 	references?: string[];
 	documentation?: string[];
@@ -77,12 +74,6 @@ export class TaskHandlers {
 
 	async createTask(args: TaskCreateArgs): Promise<CallToolResult> {
 		try {
-			const acceptanceCriteria =
-				args.acceptanceCriteria
-					?.map((text) => String(text).trim())
-					.filter((text) => text.length > 0)
-					.map((text) => ({ text, checked: false })) ?? undefined;
-
 			let milestone: string | undefined;
 			if (typeof args.milestone === "string") {
 				const [activeMilestones, archivedMilestones] = await Promise.all([
@@ -105,9 +96,6 @@ export class TaskHandlers {
 				documentation: args.documentation,
 				parentTaskId: args.parentTaskId,
 				finalSummary: args.finalSummary,
-				acceptanceCriteria,
-				definitionOfDoneAdd: args.definitionOfDoneAdd,
-				disableDefinitionOfDoneDefaults: args.disableDefinitionOfDoneDefaults,
 			});
 
 			return await formatTaskCallResult(createdTask);

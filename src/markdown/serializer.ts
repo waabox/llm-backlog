@@ -1,12 +1,7 @@
 import matter from "gray-matter";
 import type { Decision, Document, Task } from "../types/index.ts";
 import { normalizeAssignee } from "../utils/assignee.ts";
-import {
-	AcceptanceCriteriaManager,
-	DefinitionOfDoneManager,
-	getStructuredSections,
-	updateStructuredSections,
-} from "./structured-sections.ts";
+import { getStructuredSections, updateStructuredSections } from "./structured-sections.ts";
 
 export function serializeTask(task: Task): string {
 	normalizeAssignee(task);
@@ -34,25 +29,8 @@ export function serializeTask(task: Task): string {
 	if (typeof task.description === "string" && task.description.trim() !== "") {
 		contentBody = updateTaskDescription(contentBody, task.description);
 	}
-	if (Array.isArray(task.acceptanceCriteriaItems)) {
-		const existingCriteria = AcceptanceCriteriaManager.parseAllCriteria(task.rawContent ?? "");
-		const hasExistingStructuredCriteria = existingCriteria.length > 0;
-		if (task.acceptanceCriteriaItems.length > 0 || hasExistingStructuredCriteria) {
-			contentBody = AcceptanceCriteriaManager.updateContent(contentBody, task.acceptanceCriteriaItems);
-		}
-	}
-	if (Array.isArray(task.definitionOfDoneItems)) {
-		const existingDefinitionOfDone = DefinitionOfDoneManager.parseAllCriteria(task.rawContent ?? "");
-		const hasExistingDefinitionOfDone = existingDefinitionOfDone.length > 0;
-		if (task.definitionOfDoneItems.length > 0 || hasExistingDefinitionOfDone) {
-			contentBody = DefinitionOfDoneManager.updateContent(contentBody, task.definitionOfDoneItems);
-		}
-	}
 	if (typeof task.implementationPlan === "string") {
 		contentBody = updateTaskImplementationPlan(contentBody, task.implementationPlan);
-	}
-	if (typeof task.implementationNotes === "string") {
-		contentBody = updateTaskImplementationNotes(contentBody, task.implementationNotes);
 	}
 	if (typeof task.finalSummary === "string") {
 		contentBody = updateTaskFinalSummary(contentBody, task.finalSummary);
@@ -95,44 +73,11 @@ export function serializeDocument(document: Document): string {
 	return matter.stringify(document.rawContent, frontmatter);
 }
 
-export function updateTaskAcceptanceCriteria(content: string, criteria: string[]): string {
-	// Normalize to LF while computing, preserve original EOL at return
-	const useCRLF = /\r\n/.test(content);
-	const src = content.replace(/\r\n/g, "\n");
-	// Find if there's already an Acceptance Criteria section
-	const criteriaRegex = /## Acceptance Criteria\s*\n([\s\S]*?)(?=\n## |$)/i;
-	const match = src.match(criteriaRegex);
-
-	const newCriteria = criteria.map((criterion) => `- [ ] ${criterion}`).join("\n");
-	const newSection = `## Acceptance Criteria\n\n${newCriteria}`;
-
-	let out: string | undefined;
-	if (match) {
-		// Replace existing section
-		out = src.replace(criteriaRegex, newSection);
-	} else {
-		// Add new section at the end
-		out = `${src}\n\n${newSection}`;
-	}
-	return useCRLF ? out.replace(/\n/g, "\r\n") : out;
-}
-
 export function updateTaskImplementationPlan(content: string, plan: string): string {
 	const sections = getStructuredSections(content);
 	return updateStructuredSections(content, {
 		description: sections.description ?? "",
 		implementationPlan: plan,
-		implementationNotes: sections.implementationNotes ?? "",
-		finalSummary: sections.finalSummary ?? "",
-	});
-}
-
-export function updateTaskImplementationNotes(content: string, notes: string): string {
-	const sections = getStructuredSections(content);
-	return updateStructuredSections(content, {
-		description: sections.description ?? "",
-		implementationPlan: sections.implementationPlan ?? "",
-		implementationNotes: notes,
 		finalSummary: sections.finalSummary ?? "",
 	});
 }
@@ -142,27 +87,7 @@ export function updateTaskFinalSummary(content: string, summary: string): string
 	return updateStructuredSections(content, {
 		description: sections.description ?? "",
 		implementationPlan: sections.implementationPlan ?? "",
-		implementationNotes: sections.implementationNotes ?? "",
 		finalSummary: summary,
-	});
-}
-
-export function appendTaskImplementationNotes(content: string, notesChunks: string | string[]): string {
-	const chunks = (Array.isArray(notesChunks) ? notesChunks : [notesChunks])
-		.map((c) => String(c))
-		.map((c) => c.replace(/\r\n/g, "\n"))
-		.map((c) => c.trim())
-		.filter(Boolean);
-
-	const sections = getStructuredSections(content);
-	const appendedBlock = chunks.join("\n\n");
-	const existingNotes = sections.implementationNotes?.trim();
-	const combined = existingNotes ? `${existingNotes}\n\n${appendedBlock}` : appendedBlock;
-	return updateStructuredSections(content, {
-		description: sections.description ?? "",
-		implementationPlan: sections.implementationPlan ?? "",
-		implementationNotes: combined,
-		finalSummary: sections.finalSummary ?? "",
 	});
 }
 
@@ -171,7 +96,6 @@ export function updateTaskDescription(content: string, description: string): str
 	return updateStructuredSections(content, {
 		description,
 		implementationPlan: sections.implementationPlan ?? "",
-		implementationNotes: sections.implementationNotes ?? "",
 		finalSummary: sections.finalSummary ?? "",
 	});
 }

@@ -16,15 +16,6 @@ function sanitizeAppend(values: string[] | undefined): string[] | undefined {
 	return sanitized;
 }
 
-function toAcceptanceCriteriaEntries(values: string[] | undefined) {
-	if (!values) return undefined;
-	const trimmed = values.map((value) => String(value).trim()).filter((value) => value.length > 0);
-	if (trimmed.length === 0) {
-		return undefined;
-	}
-	return trimmed.map((text, index) => ({ text, checked: false, index: index + 1 }));
-}
-
 export function buildTaskUpdateInput(args: TaskEditArgs): TaskUpdateInput {
 	const updateInput: TaskUpdateInput = {};
 
@@ -124,20 +115,6 @@ export function buildTaskUpdateInput(args: TaskEditArgs): TaskUpdateInput {
 		updateInput.clearImplementationPlan = true;
 	}
 
-	const notesSet = args.notesSet ?? args.implementationNotes;
-	if (typeof notesSet === "string") {
-		updateInput.implementationNotes = notesSet;
-	}
-
-	const notesAppends = sanitizeAppend(args.notesAppend);
-	if (notesAppends) {
-		updateInput.appendImplementationNotes = notesAppends;
-	}
-
-	if (args.notesClear) {
-		updateInput.clearImplementationNotes = true;
-	}
-
 	if (typeof args.finalSummary === "string") {
 		updateInput.finalSummary = args.finalSummary;
 	}
@@ -149,55 +126,6 @@ export function buildTaskUpdateInput(args: TaskEditArgs): TaskUpdateInput {
 
 	if (args.finalSummaryClear) {
 		updateInput.clearFinalSummary = true;
-	}
-
-	const criteriaSet = toAcceptanceCriteriaEntries(args.acceptanceCriteriaSet);
-	if (criteriaSet) {
-		updateInput.acceptanceCriteria = criteriaSet;
-	}
-
-	if (Array.isArray(args.acceptanceCriteriaAdd) && args.acceptanceCriteriaAdd.length > 0) {
-		const additions = args.acceptanceCriteriaAdd
-			.map((text) => String(text).trim())
-			.filter((text) => text.length > 0)
-			.map((text) => ({ text, checked: false }));
-		if (additions.length > 0) {
-			updateInput.addAcceptanceCriteria = additions;
-		}
-	}
-
-	if (Array.isArray(args.acceptanceCriteriaRemove) && args.acceptanceCriteriaRemove.length > 0) {
-		updateInput.removeAcceptanceCriteria = [...args.acceptanceCriteriaRemove];
-	}
-
-	if (Array.isArray(args.acceptanceCriteriaCheck) && args.acceptanceCriteriaCheck.length > 0) {
-		updateInput.checkAcceptanceCriteria = [...args.acceptanceCriteriaCheck];
-	}
-
-	if (Array.isArray(args.acceptanceCriteriaUncheck) && args.acceptanceCriteriaUncheck.length > 0) {
-		updateInput.uncheckAcceptanceCriteria = [...args.acceptanceCriteriaUncheck];
-	}
-
-	if (Array.isArray(args.definitionOfDoneAdd) && args.definitionOfDoneAdd.length > 0) {
-		const additions = args.definitionOfDoneAdd
-			.map((text) => String(text).trim())
-			.filter((text) => text.length > 0)
-			.map((text) => ({ text, checked: false }));
-		if (additions.length > 0) {
-			updateInput.addDefinitionOfDone = additions;
-		}
-	}
-
-	if (Array.isArray(args.definitionOfDoneRemove) && args.definitionOfDoneRemove.length > 0) {
-		updateInput.removeDefinitionOfDone = [...args.definitionOfDoneRemove];
-	}
-
-	if (Array.isArray(args.definitionOfDoneCheck) && args.definitionOfDoneCheck.length > 0) {
-		updateInput.checkDefinitionOfDone = [...args.definitionOfDoneCheck];
-	}
-
-	if (Array.isArray(args.definitionOfDoneUncheck) && args.definitionOfDoneUncheck.length > 0) {
-		updateInput.uncheckDefinitionOfDone = [...args.definitionOfDoneUncheck];
 	}
 
 	return updateInput;

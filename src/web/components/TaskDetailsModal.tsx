@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { AcceptanceCriterion, Milestone, Task } from "../../types";
+import type { Milestone, Task } from "../../types";
 import Modal from "./Modal";
 import { apiClient } from "../lib/api";
 import { useTheme } from "../contexts/ThemeContext";
 import MDEditor from "@uiw/react-md-editor";
-import AcceptanceCriteriaEditor from "./AcceptanceCriteriaEditor";
 import MermaidMarkdown from './MermaidMarkdown';
-import ChipInput from "./ChipInput";
 import AssigneeInput from "./AssigneeInput";
+import LabelInput from "./LabelInput";
 import DependencyInput from "./DependencyInput";
 import { formatStoredUtcDateForDisplay } from "../utils/date-display";
 import { getMilestoneLabel, resolveMilestoneInput } from "../utils/milestones";
@@ -25,21 +24,12 @@ interface Props {
   availableMilestones?: string[];
   milestoneEntities?: Milestone[];
   archivedMilestoneEntities?: Milestone[];
-  definitionOfDoneDefaults?: string[];
   onOpenTask?: (task: Task) => void;
   onAddSubtask?: (parentId: string) => void;
   parentTaskId?: string; // Set in create mode when creating a subtask
 }
 
 type Mode = "preview" | "edit" | "create";
-
-type TaskUpdatePayload = Partial<Task> & {
-  definitionOfDoneAdd?: string[];
-  definitionOfDoneRemove?: number[];
-  definitionOfDoneCheck?: number[];
-  definitionOfDoneUncheck?: number[];
-  disableDefinitionOfDoneDefaults?: boolean;
-};
 
 type InlineMetaUpdatePayload = Omit<Partial<Task>, "milestone"> & {
   milestone?: string | null;
@@ -62,10 +52,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
   onSubmit,
   onArchive,
   availableStatuses,
-  availableMilestones,
   milestoneEntities,
   archivedMilestoneEntities,
-  definitionOfDoneDefaults,
   onOpenTask,
   onAddSubtask,
   parentTaskId,
@@ -84,15 +72,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   // Editable fields (edit mode)
   const [description, setDescription] = useState(task?.description || "");
   const [plan, setPlan] = useState(task?.implementationPlan || "");
-  const [notes, setNotes] = useState(task?.implementationNotes || "");
   const [finalSummary, setFinalSummary] = useState(task?.finalSummary || "");
-  const [criteria, setCriteria] = useState<AcceptanceCriterion[]>(task?.acceptanceCriteriaItems || []);
-  const defaultDefinitionOfDone = useMemo(
-    () => (definitionOfDoneDefaults ?? []).map((text, index) => ({ index: index + 1, text, checked: false })),
-    [definitionOfDoneDefaults],
-  );
-  const initialDefinitionOfDone = task?.definitionOfDoneItems ?? (isCreateMode ? defaultDefinitionOfDone : []);
-  const [definitionOfDone, setDefinitionOfDone] = useState<AcceptanceCriterion[]>(initialDefinitionOfDone);
   const resolveMilestoneToId = useCallback((value?: string | null): string => {
     const normalized = (value ?? "").trim();
     if (!normalized) return "";
@@ -121,23 +101,17 @@ export const TaskDetailsModal: React.FC<Props> = ({
     title: task?.title || "",
     description: task?.description || "",
     plan: task?.implementationPlan || "",
-    notes: task?.implementationNotes || "",
     finalSummary: task?.finalSummary || "",
-    criteria: JSON.stringify(task?.acceptanceCriteriaItems || []),
-    definitionOfDone: JSON.stringify(task?.definitionOfDoneItems || (isCreateMode ? defaultDefinitionOfDone : [])),
-  }), [task, defaultDefinitionOfDone, isCreateMode]);
+  }), [task]);
 
   const isDirty = useMemo(() => {
     return (
       title !== baseline.title ||
       description !== baseline.description ||
       plan !== baseline.plan ||
-      notes !== baseline.notes ||
-      finalSummary !== baseline.finalSummary ||
-      JSON.stringify(criteria) !== baseline.criteria ||
-      JSON.stringify(definitionOfDone) !== baseline.definitionOfDone
+      finalSummary !== baseline.finalSummary
     );
-  }, [title, description, plan, notes, finalSummary, criteria, definitionOfDone, baseline]);
+  }, [title, description, plan, finalSummary, baseline]);
 
   // Intercept Escape to cancel edit (not close modal) when in edit mode
   useEffect(() => {
@@ -165,17 +139,14 @@ export const TaskDetailsModal: React.FC<Props> = ({
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true } as any);
-  }, [mode, title, description, plan, notes, finalSummary, criteria, definitionOfDone, status]);
+  }, [mode, title, description, plan, finalSummary, status]);
 
   // Reset local state when task changes or modal opens
   useEffect(() => {
     setTitle(task?.title || "");
     setDescription(task?.description || "");
     setPlan(task?.implementationPlan || "");
-    setNotes(task?.implementationNotes || "");
     setFinalSummary(task?.finalSummary || "");
-    setCriteria(task?.acceptanceCriteriaItems || []);
-    setDefinitionOfDone(task?.definitionOfDoneItems || (isCreateMode ? defaultDefinitionOfDone : []));
     setStatus(task?.status || (availableStatuses?.[0] || "To Do"));
     setAssignee(task?.assignee || []);
     setLabels(task?.labels || []);
@@ -194,7 +165,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     } else {
       setSubtasks([]);
     }
-  }, [task, isOpen, isCreateMode, availableStatuses, defaultDefinitionOfDone]);
+  }, [task, isOpen, isCreateMode, availableStatuses]);
 
   const handleCancelEdit = () => {
     if (isDirty) {
@@ -202,119 +173,20 @@ export const TaskDetailsModal: React.FC<Props> = ({
       if (!confirmDiscard) return;
     }
     if (isCreateMode) {
-      // In create mode, close the modal on cancel
       onClose();
     } else {
       setTitle(task?.title || "");
       setDescription(task?.description || "");
       setPlan(task?.implementationPlan || "");
-      setNotes(task?.implementationNotes || "");
       setFinalSummary(task?.finalSummary || "");
-      setCriteria(task?.acceptanceCriteriaItems || []);
-      setDefinitionOfDone(task?.definitionOfDoneItems || []);
       setMode("preview");
     }
-  };
-
-  const normalizeChecklistItems = (items: AcceptanceCriterion[]): AcceptanceCriterion[] => {
-    return items
-      .map((item) => ({ ...item, text: item.text.trim() }))
-      .filter((item) => item.text.length > 0);
-  };
-
-  const buildDefinitionOfDoneCreatePayload = (): TaskUpdatePayload => {
-    const cleanedCurrent = normalizeChecklistItems(definitionOfDone);
-    const defaults = (definitionOfDoneDefaults ?? []).map((item) => item.trim()).filter((item) => item.length > 0);
-    const defaultItems = defaults.map((text, index) => ({ index: index + 1, text, checked: false }));
-    const defaultsMatch =
-      cleanedCurrent.length >= defaultItems.length &&
-      defaultItems.every(
-        (item, index) =>
-          cleanedCurrent[index]?.text === item.text && cleanedCurrent[index]?.checked === false,
-      );
-
-    const disableDefaults = !defaultsMatch;
-    const definitionOfDoneAdd = disableDefaults
-      ? cleanedCurrent.map((item) => item.text)
-      : cleanedCurrent.slice(defaultItems.length).map((item) => item.text);
-
-    const payload: TaskUpdatePayload = {};
-    if (definitionOfDoneAdd.length > 0) {
-      payload.definitionOfDoneAdd = definitionOfDoneAdd;
-    }
-    if (disableDefaults) {
-      payload.disableDefinitionOfDoneDefaults = true;
-    }
-    return payload;
-  };
-
-  const buildDefinitionOfDoneEditPayload = (): TaskUpdatePayload => {
-    const original = task?.definitionOfDoneItems ?? [];
-    const cleanedCurrent = normalizeChecklistItems(definitionOfDone);
-    const originalByIndex = new Map(original.map((item) => [item.index, item]));
-    const currentByIndex = new Map(cleanedCurrent.map((item) => [item.index, item]));
-    const removals = new Set<number>();
-    const additions: string[] = [];
-    const checks: number[] = [];
-    const unchecks: number[] = [];
-
-    let nextIndex = original.reduce((max, item) => Math.max(max, item.index), 0);
-
-    for (const item of cleanedCurrent) {
-      const originalItem = originalByIndex.get(item.index);
-      if (!originalItem) {
-        additions.push(item.text);
-        nextIndex += 1;
-        if (item.checked) {
-          checks.push(nextIndex);
-        }
-        continue;
-      }
-      if (originalItem.text !== item.text) {
-        removals.add(item.index);
-        additions.push(item.text);
-        nextIndex += 1;
-        if (item.checked) {
-          checks.push(nextIndex);
-        }
-        continue;
-      }
-      if (originalItem.checked !== item.checked) {
-        if (item.checked) {
-          checks.push(item.index);
-        } else {
-          unchecks.push(item.index);
-        }
-      }
-    }
-
-    for (const originalItem of original) {
-      if (!currentByIndex.has(originalItem.index)) {
-        removals.add(originalItem.index);
-      }
-    }
-
-    const payload: TaskUpdatePayload = {};
-    if (additions.length > 0) {
-      payload.definitionOfDoneAdd = additions;
-    }
-    if (removals.size > 0) {
-      payload.definitionOfDoneRemove = Array.from(removals);
-    }
-    if (checks.length > 0) {
-      payload.definitionOfDoneCheck = checks;
-    }
-    if (unchecks.length > 0) {
-      payload.definitionOfDoneUncheck = unchecks;
-    }
-    return payload;
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
 
-    // Validation for create mode
     if (isCreateMode && !title.trim()) {
       setError("Title is required");
       setSaving(false);
@@ -322,13 +194,11 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }
 
     try {
-      const taskData: TaskUpdatePayload = {
+      const taskData: Partial<Task> = {
         title: title.trim(),
         description,
         implementationPlan: plan,
-        implementationNotes: notes,
         finalSummary,
-        acceptanceCriteriaItems: criteria,
         status,
         assignee,
         labels,
@@ -338,23 +208,17 @@ export const TaskDetailsModal: React.FC<Props> = ({
       };
 
       if (isCreateMode && onSubmit) {
-        Object.assign(taskData, buildDefinitionOfDoneCreatePayload());
-        // Create new task; onSubmit returns false to keep modal open (e.g. navigate to parent)
         const result = await onSubmit(taskData);
         if (result !== false) {
           onClose();
         }
       } else if (task) {
-        Object.assign(taskData, buildDefinitionOfDoneEditPayload());
-        // Update existing task
         await apiClient.updateTask(task.id, taskData);
         setMode("preview");
         if (onSaved) await onSaved();
       }
     } catch (err) {
-      // Extract and display the error message from API response
       let errorMessage = 'Failed to save task';
-
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null && 'error' in err) {
@@ -362,51 +226,15 @@ export const TaskDetailsModal: React.FC<Props> = ({
       } else if (typeof err === 'string') {
         errorMessage = err;
       }
-
       setError(errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleToggleCriterion = async (index: number, checked: boolean) => {
-    if (!task) return; // Can't toggle in create mode
-    if (isFromOtherBranch) return; // Can't toggle for cross-branch tasks
-    // Optimistic update
-    const next = (criteria || []).map((c) => (c.index === index ? { ...c, checked } : c));
-    setCriteria(next);
-    try {
-      await apiClient.updateTask(task.id, { acceptanceCriteriaItems: next });
-      if (onSaved) await onSaved();
-    } catch (err) {
-      // rollback
-      setCriteria(criteria);
-      console.error("Failed to update criterion", err);
-    }
-  };
-
-  const handleToggleDefinitionOfDone = async (index: number, checked: boolean) => {
-    if (!task) return; // Can't toggle in create mode
-    if (isFromOtherBranch) return; // Can't toggle for cross-branch tasks
-    const next = (definitionOfDone || []).map((c) => (c.index === index ? { ...c, checked } : c));
-    setDefinitionOfDone(next);
-    try {
-      const updates: TaskUpdatePayload = checked
-        ? { definitionOfDoneCheck: [index] }
-        : { definitionOfDoneUncheck: [index] };
-      await apiClient.updateTask(task.id, updates);
-      if (onSaved) await onSaved();
-    } catch (err) {
-      setDefinitionOfDone(definitionOfDone);
-      console.error("Failed to update Definition of Done item", err);
-    }
-  };
-
   const handleInlineMetaUpdate = async (updates: InlineMetaUpdatePayload) => {
-    // Don't allow updates for cross-branch tasks
     if (isFromOtherBranch) return;
 
-    // Optimistic UI
     if (updates.status !== undefined) setStatus(String(updates.status));
     if (updates.assignee !== undefined) setAssignee(updates.assignee as string[]);
     if (updates.labels !== undefined) setLabels(updates.labels as string[]);
@@ -415,19 +243,15 @@ export const TaskDetailsModal: React.FC<Props> = ({
     if (updates.references !== undefined) setReferences(updates.references as string[]);
     if (updates.milestone !== undefined) setMilestone((updates.milestone ?? "") as string);
 
-    // Only update server if editing existing task
     if (task) {
       try {
         await apiClient.updateTask(task.id, updates);
         if (onSaved) await onSaved();
       } catch (err) {
         console.error("Failed to update task metadata", err);
-        // No rollback for simplicity; caller can refresh
       }
     }
   };
-
-  // labels handled via ChipInput; no textarea parsing
 
 	const handleComplete = async () => {
 		if (!task) return;
@@ -448,10 +272,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
     onClose();
   };
 
-  const checkedCount = (criteria || []).filter((c) => c.checked).length;
-  const totalCount = (criteria || []).length;
-  const definitionCheckedCount = (definitionOfDone || []).filter((c) => c.checked).length;
-  const definitionTotalCount = (definitionOfDone || []).length;
   const isDoneStatus = (status || "").toLowerCase().includes("done");
 
   const displayId = task?.id ?? "";
@@ -470,7 +290,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
     <Modal
       isOpen={isOpen}
       onClose={() => {
-        // When in edit mode, confirm closing if dirty
         if (mode === "edit" && isDirty) {
           if (!window.confirm("Discard unsaved changes and close?")) return;
         }
@@ -747,72 +566,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Acceptance Criteria */}
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-            <SectionHeader
-              title={`Acceptance Criteria ${totalCount ? `(${checkedCount}/${totalCount})` : ""}`}
-              right={mode === "preview" ? (
-                <span>Toggle to update</span>
-              ) : null}
-            />
-            {mode === "preview" ? (
-              <ul className="space-y-2">
-                {(criteria || []).map((c) => (
-                  <li key={c.index} className="flex items-start gap-2 rounded-md px-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={c.checked}
-                      onChange={(e) => void handleToggleCriterion(c.index, e.target.checked)}
-                      className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <div className="text-sm text-gray-800 dark:text-gray-100">{c.text}</div>
-                  </li>
-                ))}
-                {totalCount === 0 && (
-                  <li className="text-sm text-gray-500 dark:text-gray-400">No acceptance criteria</li>
-                )}
-              </ul>
-            ) : (
-              <AcceptanceCriteriaEditor criteria={criteria} onChange={setCriteria} />
-            )}
-          </div>
-
-          {/* Definition of Done */}
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-            <SectionHeader
-              title={`Definition of Done ${definitionTotalCount ? `(${definitionCheckedCount}/${definitionTotalCount})` : ""}`}
-              right={mode === "preview" ? (
-                <span>Toggle to update</span>
-              ) : null}
-            />
-            {mode === "preview" ? (
-              <ul className="space-y-2">
-                {(definitionOfDone || []).map((item) => (
-                  <li key={item.index} className="flex items-start gap-2 rounded-md px-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={item.checked}
-                      onChange={(e) => void handleToggleDefinitionOfDone(item.index, e.target.checked)}
-                      className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <div className="text-sm text-gray-800 dark:text-gray-100">{item.text}</div>
-                  </li>
-                ))}
-                {definitionTotalCount === 0 && (
-                  <li className="text-sm text-gray-500 dark:text-gray-400">No Definition of Done items</li>
-                )}
-              </ul>
-            ) : (
-              <AcceptanceCriteriaEditor
-                criteria={definitionOfDone}
-                onChange={setDefinitionOfDone}
-                label="Definition of Done"
-                preserveIndices
-                disableToggle={isCreateMode}
-              />
-            )}
-          </div>
-
           {/* Implementation Plan */}
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
             <SectionHeader title="Implementation Plan" />
@@ -829,30 +582,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
                 <MDEditor
                   value={plan}
                   onChange={(val) => setPlan(val || "")}
-                  preview="edit"
-                  height={280}
-                  data-color-mode={theme}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Implementation Notes */}
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-            <SectionHeader title="Implementation Notes" />
-            {mode === "preview" ? (
-              notes ? (
-                <div className="prose prose-sm !max-w-none wmde-markdown" data-color-mode={theme}>
-                  <MermaidMarkdown source={notes} />
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500 dark:text-gray-400">No notes</div>
-              )
-            ) : (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-md">
-                <MDEditor
-                  value={notes}
-                  onChange={(val) => setNotes(val || "")}
                   preview="edit"
                   height={280}
                   data-color-mode={theme}
@@ -961,7 +690,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
             ) : (
               <AssigneeInput
                 value={assignee}
-                onChange={(value) => handleInlineMetaUpdate({ assignee: value })}
+                onChange={setAssignee}
                 disabled={isFromOtherBranch}
               />
             )}
@@ -983,12 +712,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
                 <span className="text-sm text-gray-900 dark:text-gray-100">—</span>
               )
             ) : (
-              <ChipInput
-                name="labels"
-                label=""
+              <LabelInput
                 value={labels}
-                onChange={(value) => handleInlineMetaUpdate({ labels: value })}
-                placeholder="Type label and press Enter or comma"
+                onChange={setLabels}
                 disabled={isFromOtherBranch}
               />
             )}
@@ -1061,7 +787,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
             ) : (
               <DependencyInput
                 value={dependencies}
-                onChange={(value) => handleInlineMetaUpdate({ dependencies: value })}
+                onChange={setDependencies}
                 availableTasks={availableTasks}
                 currentTaskId={task?.id}
                 label=""
@@ -1106,32 +832,6 @@ const StatusSelect: React.FC<{ current: string; onChange: (v: string) => void; d
         <option key={s} value={s}>{s}</option>
       ))}
     </select>
-  );
-};
-
-const AutoResizeTextarea: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  onBlur?: () => void;
-  placeholder?: string;
-}> = ({ value, onChange, onBlur, placeholder }) => {
-  const ref = React.useRef<HTMLTextAreaElement | null>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const el = ref.current;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={onBlur}
-      rows={1}
-      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-stone-500 dark:focus:ring-stone-400 focus:border-transparent transition-colors duration-200 resize-none"
-      placeholder={placeholder}
-    />
   );
 };
 

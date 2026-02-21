@@ -20,22 +20,9 @@ export interface TaskEditArgs {
 	planSet?: string;
 	planAppend?: string[];
 	planClear?: boolean;
-	implementationNotes?: string;
-	notesSet?: string;
-	notesAppend?: string[];
-	notesClear?: boolean;
 	finalSummary?: string;
 	finalSummaryAppend?: string[];
 	finalSummaryClear?: boolean;
-	acceptanceCriteriaSet?: string[];
-	acceptanceCriteriaAdd?: string[];
-	acceptanceCriteriaRemove?: number[];
-	acceptanceCriteriaCheck?: number[];
-	acceptanceCriteriaUncheck?: number[];
-	definitionOfDoneAdd?: string[];
-	definitionOfDoneRemove?: number[];
-	definitionOfDoneCheck?: number[];
-	definitionOfDoneUncheck?: number[];
 }
 
 export type TaskEditRequest = TaskEditArgs & { id: string };

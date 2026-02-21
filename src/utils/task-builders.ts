@@ -1,5 +1,4 @@
 import type { Core } from "../core/backlog.ts";
-import type { AcceptanceCriterion } from "../types/index.ts";
 import { normalizeTaskId, taskIdsEqual } from "./task-path.ts";
 
 /**
@@ -60,30 +59,6 @@ export async function validateDependencies(
 }
 
 /**
- * Process acceptance criteria options from CLI/MCP arguments
- * Handles both --ac and --acceptance-criteria options
- */
-export function processAcceptanceCriteriaOptions(options: {
-	ac?: string | string[];
-	acceptanceCriteria?: string | string[];
-}): string[] {
-	const criteria: string[] = [];
-	// Process --ac options
-	if (options.ac) {
-		const acCriteria = Array.isArray(options.ac) ? options.ac : [options.ac];
-		criteria.push(...acCriteria.map((c) => String(c).trim()).filter(Boolean));
-	}
-	// Process --acceptance-criteria options
-	if (options.acceptanceCriteria) {
-		const accCriteria = Array.isArray(options.acceptanceCriteria)
-			? options.acceptanceCriteria
-			: [options.acceptanceCriteria];
-		criteria.push(...accCriteria.map((c) => String(c).trim()).filter(Boolean));
-	}
-	return criteria;
-}
-
-/**
  * Normalize a list of string values by trimming whitespace, dropping empties, and deduplicating.
  * Returns `undefined` when the resulting list is empty so callers can skip optional updates.
  */
@@ -127,16 +102,3 @@ export function stringArraysEqual(a: string[], b: string[]): boolean {
 	return a.every((value, index) => value === b[index]);
 }
 
-export function buildDefinitionOfDoneItems(options: {
-	defaults?: string[];
-	add?: string[];
-	disableDefaults?: boolean;
-}): AcceptanceCriterion[] | undefined {
-	const defaults = options.disableDefaults ? [] : (options.defaults ?? []);
-	const additions = options.add ?? [];
-	const combined = [...defaults, ...additions].map((value) => String(value).trim()).filter((value) => value.length > 0);
-	if (combined.length === 0) {
-		return undefined;
-	}
-	return combined.map((text, index) => ({ index: index + 1, text, checked: false }));
-}

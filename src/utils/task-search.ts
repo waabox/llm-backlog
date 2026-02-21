@@ -90,14 +90,7 @@ interface SearchableTask {
 function buildSearchableTask(task: Task): SearchableTask {
 	const bodyParts: string[] = [];
 	if (task.description) bodyParts.push(task.description);
-	if (Array.isArray(task.acceptanceCriteriaItems) && task.acceptanceCriteriaItems.length > 0) {
-		const lines = [...task.acceptanceCriteriaItems]
-			.sort((a, b) => a.index - b.index)
-			.map((criterion) => `- [${criterion.checked ? "x" : " "}] ${criterion.text}`);
-		bodyParts.push(lines.join("\n"));
-	}
 	if (task.implementationPlan) bodyParts.push(task.implementationPlan);
-	if (task.implementationNotes) bodyParts.push(task.implementationNotes);
 	if (task.labels?.length) bodyParts.push(task.labels.join(" "));
 	if (task.assignee?.length) bodyParts.push(task.assignee.join(" "));
 

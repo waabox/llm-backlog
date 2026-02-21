@@ -1,11 +1,6 @@
 import matter from "gray-matter";
-import type { AcceptanceCriterion, Decision, Document, Milestone, ParsedMarkdown, Task } from "../types/index.ts";
-import {
-	AcceptanceCriteriaManager,
-	DefinitionOfDoneManager,
-	extractStructuredSection,
-	STRUCTURED_SECTION_KEYS,
-} from "./structured-sections.ts";
+import type { Decision, Document, Milestone, ParsedMarkdown, Task } from "../types/index.ts";
+import { extractStructuredSection, STRUCTURED_SECTION_KEYS } from "./structured-sections.ts";
 
 function normalizeFlowList(prefix: string, rawValue: string): string | null {
 	// Handle inline lists like assignee: [@user, "someone"]
@@ -152,14 +147,9 @@ export function parseTask(content: string): Task {
 	const validatedPriority =
 		priority && validPriorities.includes(priority) ? (priority as "high" | "medium" | "low") : undefined;
 
-	// Parse structured acceptance criteria (checked/text/index) from all sections
-	const structuredCriteria: AcceptanceCriterion[] = AcceptanceCriteriaManager.parseAllCriteria(rawContent);
-	const structuredDefinitionOfDone: AcceptanceCriterion[] = DefinitionOfDoneManager.parseAllCriteria(rawContent);
-
-	// Parse other sections
+	// Parse sections
 	const descriptionSection = extractStructuredSection(rawContent, STRUCTURED_SECTION_KEYS.description) || "";
 	const planSection = extractStructuredSection(rawContent, STRUCTURED_SECTION_KEYS.implementationPlan) || undefined;
-	const notesSection = extractStructuredSection(rawContent, STRUCTURED_SECTION_KEYS.implementationNotes) || undefined;
 	const finalSummarySection = extractStructuredSection(rawContent, STRUCTURED_SECTION_KEYS.finalSummary) || undefined;
 
 	return {
@@ -180,11 +170,8 @@ export function parseTask(content: string): Task {
 		references: Array.isArray(frontmatter.references) ? frontmatter.references.map(String) : [],
 		documentation: Array.isArray(frontmatter.documentation) ? frontmatter.documentation.map(String) : [],
 		rawContent,
-		acceptanceCriteriaItems: structuredCriteria,
-		definitionOfDoneItems: structuredDefinitionOfDone,
 		description: descriptionSection,
 		implementationPlan: planSection,
-		implementationNotes: notesSection,
 		finalSummary: finalSummarySection,
 		parentTaskId: frontmatter.parent_task_id ? String(frontmatter.parent_task_id) : undefined,
 		subtasks: Array.isArray(frontmatter.subtasks) ? frontmatter.subtasks.map(String) : undefined,

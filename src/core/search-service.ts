@@ -408,19 +408,8 @@ function buildTaskBodyText(task: Task): string {
 		parts.push(task.description);
 	}
 
-	if (Array.isArray(task.acceptanceCriteriaItems) && task.acceptanceCriteriaItems.length > 0) {
-		const lines = [...task.acceptanceCriteriaItems]
-			.sort((a, b) => a.index - b.index)
-			.map((criterion) => `- [${criterion.checked ? "x" : " "}] ${criterion.text}`);
-		parts.push(lines.join("\n"));
-	}
-
 	if (task.implementationPlan) {
 		parts.push(task.implementationPlan);
-	}
-
-	if (task.implementationNotes) {
-		parts.push(task.implementationNotes);
 	}
 
 	return parts.join("\n\n");

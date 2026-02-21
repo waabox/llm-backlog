@@ -4,12 +4,7 @@ import { EntityType, type Sequence, type Task, type TaskCreateInput, type TaskUp
 import { normalizeAssignee } from "../utils/assignee.ts";
 import { normalizeId } from "../utils/prefix-config.ts";
 import { executeStatusCallback } from "../utils/status-callback.ts";
-import {
-	buildDefinitionOfDoneItems,
-	normalizeDependencies,
-	normalizeStringList,
-	validateDependencies,
-} from "../utils/task-builders.ts";
+import { normalizeDependencies, normalizeStringList, validateDependencies } from "../utils/task-builders.ts";
 import { getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
 import type { Core } from "./backlog.ts";
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
@@ -28,9 +23,7 @@ export async function createTaskFromData(
 		parentTaskId?: string;
 		priority?: "high" | "medium" | "low";
 		description?: string;
-		acceptanceCriteriaItems?: import("../types/index.ts").AcceptanceCriterion[];
 		implementationPlan?: string;
-		implementationNotes?: string;
 		finalSummary?: string;
 		milestone?: string;
 	},
@@ -56,12 +49,7 @@ export async function createTaskFromData(
 				milestone: taskData.milestone.trim(),
 			}),
 		...(typeof taskData.description === "string" && { description: taskData.description }),
-		...(Array.isArray(taskData.acceptanceCriteriaItems) &&
-			taskData.acceptanceCriteriaItems.length > 0 && {
-				acceptanceCriteriaItems: taskData.acceptanceCriteriaItems,
-			}),
 		...(typeof taskData.implementationPlan === "string" && { implementationPlan: taskData.implementationPlan }),
-		...(typeof taskData.implementationNotes === "string" && { implementationNotes: taskData.implementationNotes }),
 		...(typeof taskData.finalSummary === "string" && { finalSummary: taskData.finalSummary }),
 	};
 
@@ -117,22 +105,6 @@ export async function createTaskFromInput(
 	const priority = normalizePriority(input.priority);
 	const createdDate = new Date().toISOString().slice(0, 16).replace("T", " ");
 
-	const acceptanceCriteriaItems = Array.isArray(input.acceptanceCriteria)
-		? input.acceptanceCriteria
-				.map((criterion, index) => ({
-					index: index + 1,
-					text: String(criterion.text ?? "").trim(),
-					checked: Boolean(criterion.checked),
-				}))
-				.filter((criterion) => criterion.text.length > 0)
-		: [];
-	const config = await core.fs.loadConfig();
-	const definitionOfDoneItems = buildDefinitionOfDoneItems({
-		defaults: config?.definitionOfDone,
-		add: input.definitionOfDoneAdd,
-		disableDefaults: input.disableDefinitionOfDoneDefaults,
-	});
-
 	const task: Task = {
 		id,
 		title: input.title.trim(),
@@ -152,10 +124,7 @@ export async function createTaskFromInput(
 			}),
 		...(typeof input.description === "string" && { description: input.description }),
 		...(typeof input.implementationPlan === "string" && { implementationPlan: input.implementationPlan }),
-		...(typeof input.implementationNotes === "string" && { implementationNotes: input.implementationNotes }),
 		...(typeof input.finalSummary === "string" && { finalSummary: input.finalSummary }),
-		...(acceptanceCriteriaItems.length > 0 && { acceptanceCriteriaItems }),
-		...(definitionOfDoneItems && definitionOfDoneItems.length > 0 && { definitionOfDoneItems }),
 	};
 
 	const filePath = isDraft ? await createDraft(core, task, autoCommit) : await createTask(core, task, autoCommit);

@@ -182,21 +182,6 @@ export async function handleCreateTask(req: Request, core: Core, broadcast: () =
 		return Response.json({ error: "Title is required" }, { status: 400 });
 	}
 
-	const acceptanceCriteria = Array.isArray(payload.acceptanceCriteriaItems)
-		? payload.acceptanceCriteriaItems
-				.map((item: { text?: string; checked?: boolean }) => ({
-					text: String(item?.text ?? "").trim(),
-					checked: Boolean(item?.checked),
-				}))
-				.filter((item: { text: string }) => item.text.length > 0)
-		: [];
-	const definitionOfDoneAdd = Array.isArray(payload.definitionOfDoneAdd)
-		? payload.definitionOfDoneAdd
-				.map((item: unknown) => String(item ?? "").trim())
-				.filter((item: string) => item.length > 0)
-		: [];
-	const disableDefinitionOfDoneDefaults = Boolean(payload.disableDefinitionOfDoneDefaults);
-
 	try {
 		let milestone: string | undefined;
 		if (typeof payload.milestone === "string") {
@@ -219,11 +204,7 @@ export async function handleCreateTask(req: Request, core: Core, broadcast: () =
 			references: payload.references,
 			parentTaskId: payload.parentTaskId,
 			implementationPlan: payload.implementationPlan,
-			implementationNotes: payload.implementationNotes,
 			finalSummary: payload.finalSummary,
-			acceptanceCriteria,
-			definitionOfDoneAdd,
-			disableDefinitionOfDoneDefaults,
 		});
 		broadcast();
 		return Response.json(createdTask, { status: 201 });
@@ -311,45 +292,8 @@ export async function handleUpdateTask(
 		updateInput.implementationPlan = updates.implementationPlan;
 	}
 
-	if ("implementationNotes" in updates && typeof updates.implementationNotes === "string") {
-		updateInput.implementationNotes = updates.implementationNotes;
-	}
-
 	if ("finalSummary" in updates && typeof updates.finalSummary === "string") {
 		updateInput.finalSummary = updates.finalSummary;
-	}
-
-	if ("acceptanceCriteriaItems" in updates && Array.isArray(updates.acceptanceCriteriaItems)) {
-		updateInput.acceptanceCriteria = updates.acceptanceCriteriaItems
-			.map((item: { text?: string; checked?: boolean }) => ({
-				text: String(item?.text ?? "").trim(),
-				checked: Boolean(item?.checked),
-			}))
-			.filter((item: { text: string }) => item.text.length > 0);
-	}
-
-	if ("definitionOfDoneAdd" in updates && Array.isArray(updates.definitionOfDoneAdd)) {
-		updateInput.addDefinitionOfDone = updates.definitionOfDoneAdd
-			.map((item: unknown) => ({ text: String(item ?? "").trim(), checked: false }))
-			.filter((item: { text: string }) => item.text.length > 0);
-	}
-
-	if ("definitionOfDoneRemove" in updates && Array.isArray(updates.definitionOfDoneRemove)) {
-		updateInput.removeDefinitionOfDone = updates.definitionOfDoneRemove.filter(
-			(value: unknown) => typeof value === "number" && Number.isFinite(value),
-		);
-	}
-
-	if ("definitionOfDoneCheck" in updates && Array.isArray(updates.definitionOfDoneCheck)) {
-		updateInput.checkDefinitionOfDone = updates.definitionOfDoneCheck.filter(
-			(value: unknown) => typeof value === "number" && Number.isFinite(value),
-		);
-	}
-
-	if ("definitionOfDoneUncheck" in updates && Array.isArray(updates.definitionOfDoneUncheck)) {
-		updateInput.uncheckDefinitionOfDone = updates.definitionOfDoneUncheck.filter(
-			(value: unknown) => typeof value === "number" && Number.isFinite(value),
-		);
 	}
 
 	try {

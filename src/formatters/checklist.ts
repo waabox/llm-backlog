@@ -47,45 +47,6 @@ export function formatChecklistItem(
 }
 
 /**
- * Process acceptance criteria section and align checkboxes
- */
-export function alignAcceptanceCriteria(criteriaSection: string): string[] {
-	if (!criteriaSection) return [];
-
-	return criteriaSection
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0)
-		.map((line) => {
-			const item = parseCheckboxLine(line);
-			if (item) {
-				return formatChecklistItem(item);
-			}
-			// Return non-checkbox lines as-is with minimal padding
-			return ` ${line}`;
-		});
-}
-
-/**
- * Extract and format acceptance criteria from markdown content
- */
-export function extractAndFormatAcceptanceCriteria(content: string): string[] {
-	const criteriaSection = extractSection(content, "Acceptance Criteria");
-	if (!criteriaSection) return [];
-
-	return alignAcceptanceCriteria(criteriaSection);
-}
-
-/**
- * Extract a section from markdown content
- */
-function extractSection(content: string, sectionTitle: string): string | undefined {
-	const regex = new RegExp(`## ${sectionTitle}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, "i");
-	const match = content.match(regex);
-	return match?.[1]?.trim();
-}
-
-/**
  * Format multiple checklist items with consistent alignment
  */
 export function formatChecklist(items: ChecklistItem[]): string[] {

@@ -93,23 +93,6 @@ export function generateTaskCreateSchema(config: BacklogConfig): JsonSchema {
 				maxLength: 20000,
 				description: "Final summary for PR-style completion notes. Write this only when the task is complete.",
 			},
-			acceptanceCriteria: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 500,
-				},
-			},
-			definitionOfDoneAdd: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 500,
-				},
-			},
-			disableDefinitionOfDoneDefaults: {
-				type: "boolean",
-			},
 			parentTaskId: {
 				type: "string",
 				maxLength: 50,
@@ -220,10 +203,6 @@ export function generateTaskEditSchema(config: BacklogConfig): JsonSchema {
 				},
 				description: "Remove documentation URLs or file paths",
 			},
-			implementationNotes: {
-				type: "string",
-				maxLength: 10000,
-			},
 			finalSummary: {
 				type: "string",
 				maxLength: 20000,
@@ -240,21 +219,6 @@ export function generateTaskEditSchema(config: BacklogConfig): JsonSchema {
 			finalSummaryClear: {
 				type: "boolean",
 			},
-			notesSet: {
-				type: "string",
-				maxLength: 20000,
-			},
-			notesAppend: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 5000,
-				},
-				maxItems: 20,
-			},
-			notesClear: {
-				type: "boolean",
-			},
 			planSet: {
 				type: "string",
 				maxLength: 20000,
@@ -269,78 +233,6 @@ export function generateTaskEditSchema(config: BacklogConfig): JsonSchema {
 			},
 			planClear: {
 				type: "boolean",
-			},
-			acceptanceCriteriaSet: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 500,
-				},
-				maxItems: 50,
-			},
-			acceptanceCriteriaAdd: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 500,
-				},
-				maxItems: 50,
-			},
-			acceptanceCriteriaRemove: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
-			},
-			acceptanceCriteriaCheck: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
-			},
-			acceptanceCriteriaUncheck: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
-			},
-			definitionOfDoneAdd: {
-				type: "array",
-				items: {
-					type: "string",
-					maxLength: 500,
-				},
-				maxItems: 50,
-			},
-			definitionOfDoneRemove: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
-			},
-			definitionOfDoneCheck: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
-			},
-			definitionOfDoneUncheck: {
-				type: "array",
-				items: {
-					type: "number",
-					minimum: 1,
-				},
-				maxItems: 50,
 			},
 		},
 		required: ["id"],
