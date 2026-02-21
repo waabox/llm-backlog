@@ -415,6 +415,54 @@ describe("REST API — milestones", () => {
 		const milestone = await res.json();
 		expect(milestone.id).toBe("m-0");
 	});
+
+	test("PUT /api/milestones/:id/active toggles milestone active state", async () => {
+		// Create a new milestone — defaults to active: false
+		const createRes = await fetch(`${env.baseUrl}/api/milestones`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Backlog General" }),
+		});
+		expect([200, 201]).toContain(createRes.status);
+		const created = await createRes.json();
+		const milestoneId = created.id;
+		expect(milestoneId).toMatch(/^m-\d+$/);
+
+		// Verify it defaults to inactive
+		const listRes = await fetch(`${env.baseUrl}/api/milestones`, { headers: env.adminHeaders });
+		const milestones = await listRes.json();
+		const newMilestone = milestones.find((m: { id: string }) => m.id === milestoneId);
+		expect(newMilestone).toBeDefined();
+		expect(newMilestone.active).toBe(false);
+
+		// Activate the milestone
+		const activateRes = await fetch(`${env.baseUrl}/api/milestones/${milestoneId}/active`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ active: true }),
+		});
+		expect(activateRes.status).toBe(200);
+		const activated = await activateRes.json();
+		expect(activated.success).toBe(true);
+		expect(activated.milestone.active).toBe(true);
+
+		// Verify via GET that it's now active
+		const afterActivateRes = await fetch(`${env.baseUrl}/api/milestones`, { headers: env.adminHeaders });
+		const afterActivate = await afterActivateRes.json();
+		const activatedMilestone = afterActivate.find((m: { id: string }) => m.id === milestoneId);
+		expect(activatedMilestone.active).toBe(true);
+
+		// Deactivate the milestone
+		const deactivateRes = await fetch(`${env.baseUrl}/api/milestones/${milestoneId}/active`, {
+			method: "PUT",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ active: false }),
+		});
+		expect(deactivateRes.status).toBe(200);
+		const deactivated = await deactivateRes.json();
+		expect(deactivated.success).toBe(true);
+		expect(deactivated.milestone.active).toBe(false);
+	});
 });
 
 describe("REST API — decisions & docs", () => {
