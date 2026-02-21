@@ -107,9 +107,16 @@ export class Core {
 	private readonly enableWatchers: boolean;
 	private autoCommitOverride: boolean | null = null;
 
-	constructor(projectRoot: string, options?: { enableWatchers?: boolean }) {
-		this.fs = new FileSystem(projectRoot);
-		this.git = new GitOperations(projectRoot);
+	constructor(
+		projectRoot: string,
+		options?: {
+			enableWatchers?: boolean;
+			filesystem?: FileSystem;
+			gitOperations?: GitOperations;
+		},
+	) {
+		this.fs = options?.filesystem ?? new FileSystem(projectRoot);
+		this.git = options?.gitOperations ?? new GitOperations(projectRoot);
 		// Disable watchers by default for CLI commands (non-interactive)
 		// Interactive modes (TUI, browser, MCP) should explicitly pass enableWatchers: true
 		this.enableWatchers = options?.enableWatchers ?? false;
