@@ -1047,6 +1047,7 @@ describe("milestone cascade to subtasks", () => {
 			body: JSON.stringify({ title: "Sprint Alpha" }),
 		});
 		expect(m1Res.status).toBe(201);
+		const m1 = await m1Res.json();
 
 		const m2Res = await fetch(`${env.baseUrl}/api/milestones`, {
 			method: "POST",
@@ -1054,12 +1055,13 @@ describe("milestone cascade to subtasks", () => {
 			body: JSON.stringify({ title: "Sprint Beta" }),
 		});
 		expect(m2Res.status).toBe(201);
+		const m2 = await m2Res.json();
 
 		// Create parent task with milestone Sprint Alpha
 		const parentRes = await fetch(`${env.baseUrl}/api/tasks`, {
 			method: "POST",
 			headers: env.adminHeaders,
-			body: JSON.stringify({ title: "Parent Task", milestone: "Sprint Alpha" }),
+			body: JSON.stringify({ title: "Parent Task", milestone: m1.id }),
 		});
 		expect(parentRes.status).toBe(201);
 		const parent = await parentRes.json();
@@ -1068,7 +1070,7 @@ describe("milestone cascade to subtasks", () => {
 		const subtaskRes = await fetch(`${env.baseUrl}/api/tasks`, {
 			method: "POST",
 			headers: env.adminHeaders,
-			body: JSON.stringify({ title: "Subtask One", parentTaskId: parent.id, milestone: "Sprint Alpha" }),
+			body: JSON.stringify({ title: "Subtask One", parentTaskId: parent.id, milestone: m1.id }),
 		});
 		expect(subtaskRes.status).toBe(201);
 		const subtask = await subtaskRes.json();
@@ -1077,7 +1079,7 @@ describe("milestone cascade to subtasks", () => {
 		const updateRes = await fetch(`${env.baseUrl}/api/tasks/${parent.id}`, {
 			method: "PUT",
 			headers: env.adminHeaders,
-			body: JSON.stringify({ milestone: "Sprint Beta" }),
+			body: JSON.stringify({ milestone: m2.id }),
 		});
 		expect(updateRes.status).toBe(200);
 
@@ -1087,6 +1089,6 @@ describe("milestone cascade to subtasks", () => {
 		});
 		expect(subtaskAfterRes.status).toBe(200);
 		const subtaskAfter = await subtaskAfterRes.json();
-		expect(subtaskAfter.milestone).toBe("Sprint Beta");
+		expect(subtaskAfter.milestone).toBe(m2.id);
 	});
 });
