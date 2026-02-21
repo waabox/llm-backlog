@@ -10,6 +10,8 @@ import {
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Core } from "../core/backlog.ts";
+import { FileSystem } from "../file-system/operations.ts";
+import { GitOperations } from "../git/operations.ts";
 import { getPackageName } from "../utils/app-info.ts";
 import { getVersion } from "../utils/version.ts";
 import { registerInitRequiredResource } from "./resources/init-required/index.ts";
@@ -47,6 +49,8 @@ const INSTRUCTIONS_FALLBACK =
 
 type ServerInitOptions = {
 	debug?: boolean;
+	filesystem?: FileSystem;
+	gitOperations?: GitOperations;
 };
 
 export class McpServer extends Core {
@@ -58,8 +62,12 @@ export class McpServer extends Core {
 	private readonly resources = new Map<string, McpResourceHandler>();
 	private readonly prompts = new Map<string, McpPromptHandler>();
 
-	constructor(projectRoot: string, instructions: string) {
-		super(projectRoot, { enableWatchers: true });
+	constructor(
+		projectRoot: string,
+		instructions: string,
+		options?: { filesystem?: FileSystem; gitOperations?: GitOperations },
+	) {
+		super(projectRoot, { enableWatchers: true, filesystem: options?.filesystem, gitOperations: options?.gitOperations });
 
 		this.server = new Server(
 			{
@@ -296,13 +304,13 @@ export class McpServer extends Core {
  */
 export async function createMcpServer(projectRoot: string, options: ServerInitOptions = {}): Promise<McpServer> {
 	// We need to check config first to determine which instructions to use
-	const tempCore = new Core(projectRoot);
+	const tempCore = new Core(projectRoot, { filesystem: options.filesystem, gitOperations: options.gitOperations });
 	await tempCore.ensureConfigLoaded();
 	const config = await tempCore.filesystem.loadConfig();
 
 	// Create server with appropriate instructions
 	const instructions = config ? INSTRUCTIONS_NORMAL : INSTRUCTIONS_FALLBACK;
-	const server = new McpServer(projectRoot, instructions);
+	const server = new McpServer(projectRoot, instructions, { filesystem: options.filesystem, gitOperations: options.gitOperations });
 
 	// Graceful fallback: if config doesn't exist, provide init-required resource
 	if (!config) {
