@@ -675,6 +675,70 @@ describe("MCP endpoint", () => {
 	});
 });
 
+describe("MCP ↔ REST sync", () => {
+	let env: TestEnv;
+
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+
+	afterAll(async () => {
+		await stopTestEnv(env);
+	});
+
+	async function mcpCall(body: unknown): Promise<Response> {
+		return fetch(`${env.baseUrl}/mcp`, {
+			method: "POST",
+			headers: {
+				...env.adminHeaders,
+				Accept: "application/json, text/event-stream",
+			},
+			body: JSON.stringify(body),
+		});
+	}
+
+	test("task created via MCP is immediately visible via REST", async () => {
+		// Create via MCP
+		await mcpCall({
+			jsonrpc: "2.0",
+			id: 10,
+			method: "tools/call",
+			params: {
+				name: "task_create",
+				arguments: { title: "Sync test from MCP" },
+			},
+		});
+
+		// List via REST — no delay needed because patch chain is synchronous
+		const res = await fetch(`${env.baseUrl}/api/tasks`, { headers: env.adminHeaders });
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		const tasks = Array.isArray(body) ? body : (body.tasks ?? body.data ?? []);
+		const titles = tasks.map((t: { title: string }) => t.title);
+		expect(titles).toContain("Sync test from MCP");
+	});
+
+	test("task created via REST is immediately visible via MCP task_list", async () => {
+		// Create via REST
+		await fetch(`${env.baseUrl}/api/tasks`, {
+			method: "POST",
+			headers: env.adminHeaders,
+			body: JSON.stringify({ title: "Sync test from REST" }),
+		});
+
+		// List via MCP
+		const res = await mcpCall({
+			jsonrpc: "2.0",
+			id: 11,
+			method: "tools/call",
+			params: { name: "task_list", arguments: {} },
+		});
+		expect(res.status).toBe(200);
+		const text = await res.text();
+		expect(text).toContain("Sync test from REST");
+	});
+});
+
 describe("MCP — task_move", () => {
 	let env: TestEnv;
 
