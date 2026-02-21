@@ -89,6 +89,7 @@ export async function handleListTasks(req: Request, core: Core): Promise<Respons
 	const tasks = await core.queryTasks({
 		filters: { status, assignee, priority, parentTaskId, labels: labels.length > 0 ? labels : undefined },
 		includeCrossBranch: crossBranch,
+		excludeInactiveMilestones: true,
 	});
 
 	return Response.json(tasks);
