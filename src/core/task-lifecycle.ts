@@ -5,7 +5,7 @@ import { normalizeAssignee } from "../utils/assignee.ts";
 import { normalizeId } from "../utils/prefix-config.ts";
 import { executeStatusCallback } from "../utils/status-callback.ts";
 import { normalizeDependencies, normalizeStringList, validateDependencies } from "../utils/task-builders.ts";
-import { getTaskPath, normalizeTaskId } from "../utils/task-path.ts";
+import { getTaskPath, normalizeTaskId, taskIdsEqual } from "../utils/task-path.ts";
 import type { Core } from "./backlog.ts";
 import { calculateNewOrdinal, DEFAULT_ORDINAL_STEP, resolveOrdinalConflicts } from "./reorder.ts";
 import { computeSequences, planMoveToSequence, planMoveToUnsequenced } from "./sequences.ts";
@@ -198,6 +198,9 @@ export async function updateTask(core: Core, task: Task, autoCommit?: boolean): 
 	const newStatus = task.status ?? "";
 	const statusChanged = oldStatus !== newStatus;
 
+	const oldMilestone = originalTask?.milestone;
+	const milestoneChanged = oldMilestone !== task.milestone;
+
 	task.updatedDate = new Date().toISOString().slice(0, 16).replace("T", " ");
 
 	await core.fs.saveTask(task);
@@ -217,6 +220,17 @@ export async function updateTask(core: Core, task: Task, autoCommit?: boolean): 
 
 	if (statusChanged) {
 		await executeStatusChangeCallback(core, task, oldStatus, newStatus);
+	}
+
+	if (milestoneChanged) {
+		const allTasks = await core.fs.listTasks();
+		const subtasks = allTasks.filter(
+			(t) => t.parentTaskId !== undefined && taskIdsEqual(t.parentTaskId, task.id),
+		);
+		for (const subtask of subtasks) {
+			subtask.milestone = task.milestone;
+			await updateTask(core, subtask, autoCommit);
+		}
 	}
 }
 
