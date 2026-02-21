@@ -3,8 +3,10 @@ import type { Server, ServerWebSocket } from "bun";
 import { $ } from "bun";
 import { Core } from "../core/backlog.ts";
 import type { ContentStore } from "../core/content-store.ts";
+import { FileSystem } from "../file-system/operations.ts";
+import { GitOperations } from "../git/operations.ts";
 import { createMcpRequestHandler, type McpRequestHandler } from "../mcp/http-transport.ts";
-import { watchBacklogDir, watchConfig } from "../utils/config-watcher.ts";
+import { watchConfig } from "../utils/config-watcher.ts";
 // @ts-expect-error
 import favicon from "../web/favicon.png" with { type: "file" };
 import indexHtml from "../web/index.html";
@@ -53,6 +55,8 @@ import {
 
 export class BacklogServer {
 	private core: Core;
+	private sharedFs: FileSystem | null = null;
+	private sharedGit: GitOperations | null = null;
 	private server: Server<unknown> | null = null;
 	private projectName = "Untitled Project";
 	private sockets = new Set<ServerWebSocket<unknown>>();
@@ -60,7 +64,6 @@ export class BacklogServer {
 	private unsubscribeContentStore?: () => void;
 	private storeReadyBroadcasted = false;
 	private configWatcher: { stop: () => void } | null = null;
-	private backlogWatcher: { stop: () => void } | null = null;
 	private configRepoService: ConfigRepoService | null = null;
 	private projectRepoService: ProjectRepoService | null = null;
 	private authEnabled = false;
@@ -72,7 +75,13 @@ export class BacklogServer {
 	constructor(projectPath: string) {
 		this.projectRepoUrl = process.env.BACKLOG_PROJECT_REPO ?? null;
 		if (!this.projectRepoUrl) {
-			this.core = new Core(projectPath, { enableWatchers: true });
+			this.sharedFs = new FileSystem(projectPath);
+			this.sharedGit = new GitOperations(projectPath);
+			this.core = new Core(projectPath, {
+				enableWatchers: true,
+				filesystem: this.sharedFs,
+				gitOperations: this.sharedGit,
+			});
 		} else {
 			// Core will be initialized in start() after the repo is cloned
 			this.core = null as unknown as Core;
@@ -153,8 +162,14 @@ export class BacklogServer {
 			console.log(`Cloning project repo: ${this.projectRepoUrl}`);
 			this.projectRepoService = new ProjectRepoService(this.projectRepoUrl);
 			await this.projectRepoService.start();
-			this.core = new Core(this.projectRepoService.dir, { enableWatchers: true });
-			this.core.git.setAutoPush(true);
+			this.sharedFs = new FileSystem(this.projectRepoService.dir);
+			this.sharedGit = new GitOperations(this.projectRepoService.dir);
+			this.core = new Core(this.projectRepoService.dir, {
+				enableWatchers: true,
+				filesystem: this.sharedFs,
+				gitOperations: this.sharedGit,
+			});
+			this.sharedGit.setAutoPush(true);
 			this.core.setAutoCommitOverride(true);
 		}
 
@@ -175,15 +190,6 @@ export class BacklogServer {
 				this.broadcastConfigUpdated();
 			},
 		});
-
-		// When running with a remote repo the MCP handler uses its own Core instance,
-		// so task mutations bypass this.core's ContentStore. Watch the backlog directory
-		// on disk to detect those changes and notify the UI via WebSocket.
-		if (this.projectRepoUrl) {
-			this.backlogWatcher = watchBacklogDir(this.core, () => {
-				this.broadcastTasksUpdated();
-			});
-		}
 
 		// Initialize auth if environment variables are configured
 		this.googleClientId = process.env.GOOGLE_CLIENT_ID ?? null;
@@ -218,6 +224,8 @@ export class BacklogServer {
 					? (key: string) => this.configRepoService?.findUserByApiKey(key) ?? null
 					: undefined,
 				autoPush: !!this.projectRepoUrl,
+				filesystem: this.sharedFs ?? undefined,
+				gitOperations: this.sharedGit ?? undefined,
 			});
 
 			const serveOptions = {
@@ -525,12 +533,6 @@ export class BacklogServer {
 		try {
 			this.configWatcher?.stop();
 			this.configWatcher = null;
-		} catch {}
-
-		// Stop backlog directory watcher
-		try {
-			this.backlogWatcher?.stop();
-			this.backlogWatcher = null;
 		} catch {}
 
 		// Stop MCP handler
