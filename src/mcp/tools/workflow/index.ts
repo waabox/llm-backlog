@@ -4,6 +4,7 @@ import type { McpToolHandler } from "../../types.ts";
 import { createSimpleValidatedTool } from "../../validation/tool-wrapper.ts";
 import type { JsonSchema } from "../../validation/validators.ts";
 import { renderWorkflowGuide, WORKFLOW_GUIDES } from "../../workflow-guides.ts";
+import { createSyncTool } from "./sync-tool.ts";
 
 const emptyInputSchema: JsonSchema = {
 	type: "object",
@@ -43,4 +44,5 @@ export function registerWorkflowTools(server: McpServer): void {
 	for (const guide of WORKFLOW_GUIDES) {
 		server.addTool(createWorkflowTool(server, guide));
 	}
+	server.addTool(createSyncTool(server));
 }
