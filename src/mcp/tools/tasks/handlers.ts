@@ -344,7 +344,7 @@ export class TaskHandlers {
 				throw new McpError(`Failed to archive task: ${args.id}`, "OPERATION_FAILED");
 			}
 
-			return await formatTaskCallResult(draft, [`Archived draft ${draft.id}.`]);
+			return await formatTaskCallResult(draft, [`Archived draft ${draft.id}.`], { compact: true });
 		}
 
 		const task = await this.loadTaskOrThrow(args.id);
@@ -366,7 +366,7 @@ export class TaskHandlers {
 		}
 
 		const refreshed = (await this.core.getTask(task.id)) ?? task;
-		return await formatTaskCallResult(refreshed);
+		return await formatTaskCallResult(refreshed, [], { compact: true });
 	}
 
 	async completeTask(args: { id: string }): Promise<CallToolResult> {
@@ -392,7 +392,7 @@ export class TaskHandlers {
 		}
 
 		return await formatTaskCallResult(task, [`Completed task ${task.id}.`], {
-			filePathOverride: completedFilePath,
+			filePathOverride: completedFilePath, compact: true,
 		});
 	}
 
@@ -404,7 +404,7 @@ export class TaskHandlers {
 		}
 
 		const refreshed = (await this.core.getTask(task.id)) ?? task;
-		return await formatTaskCallResult(refreshed);
+		return await formatTaskCallResult(refreshed, [], { compact: true });
 	}
 
 	async takeTask(args: { id: string; assignee: string }): Promise<CallToolResult> {
@@ -431,7 +431,7 @@ export class TaskHandlers {
 				updateInput.milestone = resolveMilestoneInput(updateInput.milestone, activeMilestones, archivedMilestones);
 			}
 			const updatedTask = await this.core.editTaskOrDraft(args.id, updateInput);
-			return await formatTaskCallResult(updatedTask);
+			return await formatTaskCallResult(updatedTask, [], { compact: true });
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new McpError(error.message, "VALIDATION_ERROR");

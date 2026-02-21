@@ -5,6 +5,7 @@ import { formatStatusWithIcon } from "./status-icon.ts";
 
 export type TaskPlainTextOptions = {
 	filePathOverride?: string;
+	compact?: boolean;
 };
 
 export function formatDateForDisplay(dateStr: string): string {
@@ -32,12 +33,6 @@ function formatSubtaskLines(subtasks: Array<{ id: string; title: string }>): str
 
 export function formatTaskPlainText(task: Task, options: TaskPlainTextOptions = {}): string {
 	const lines: string[] = [];
-	const filePath = options.filePathOverride ?? task.filePath;
-
-	if (filePath) {
-		lines.push(`File: ${filePath}`);
-		lines.push("");
-	}
 
 	lines.push(`Task ${task.id} - ${task.title}`);
 	lines.push("=".repeat(50));
@@ -101,27 +96,29 @@ export function formatTaskPlainText(task: Task, options: TaskPlainTextOptions = 
 		lines.push(`Documentation: ${task.documentation.join(", ")}`);
 	}
 
-	lines.push("");
-	lines.push("Description:");
-	lines.push("-".repeat(50));
-	const description = task.description?.trim();
-	lines.push(transformCodePathsPlain(description && description.length > 0 ? description : "No description provided"));
-	lines.push("");
-
-	const implementationPlan = task.implementationPlan?.trim();
-	if (implementationPlan) {
-		lines.push("Implementation Plan:");
-		lines.push("-".repeat(50));
-		lines.push(transformCodePathsPlain(implementationPlan));
+	if (!options.compact) {
 		lines.push("");
-	}
-
-	const finalSummary = task.finalSummary?.trim();
-	if (finalSummary) {
-		lines.push("Final Summary:");
+		lines.push("Description:");
 		lines.push("-".repeat(50));
-		lines.push(transformCodePathsPlain(finalSummary));
+		const description = task.description?.trim();
+		lines.push(transformCodePathsPlain(description && description.length > 0 ? description : "No description provided"));
 		lines.push("");
+
+		const implementationPlan = task.implementationPlan?.trim();
+		if (implementationPlan) {
+			lines.push("Implementation Plan:");
+			lines.push("-".repeat(50));
+			lines.push(transformCodePathsPlain(implementationPlan));
+			lines.push("");
+		}
+
+		const finalSummary = task.finalSummary?.trim();
+		if (finalSummary) {
+			lines.push("Final Summary:");
+			lines.push("-".repeat(50));
+			lines.push(transformCodePathsPlain(finalSummary));
+			lines.push("");
+		}
 	}
 
 	return lines.join("\n");
