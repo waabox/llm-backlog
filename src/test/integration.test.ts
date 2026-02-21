@@ -778,3 +778,79 @@ describe("REST API — config", () => {
 		expect(body.statuses).toEqual(["Backlog", "In Progress", "Review", "Done"]);
 	});
 });
+
+// ── subtask bidirectional navigation ─────────────────────────────────────────
+
+async function mcpCall(
+	env: TestEnv,
+	toolName: string,
+	args: Record<string, unknown>,
+): Promise<{ result: { content: Array<{ text: string }> } }> {
+	const res = await fetch(`${env.baseUrl}/mcp`, {
+		method: "POST",
+		headers: {
+			...env.adminHeaders,
+			Accept: "application/json, text/event-stream",
+		},
+		body: JSON.stringify({
+			jsonrpc: "2.0",
+			id: Math.floor(Math.random() * 10000),
+			method: "tools/call",
+			params: { name: toolName, arguments: args },
+		}),
+	});
+
+	const text = await res.text();
+
+	// The MCP endpoint may return SSE (text/event-stream) or plain JSON.
+	// Extract the JSON-RPC result from either format.
+	let parsed: { result?: { content: Array<{ text: string }> } };
+	const jsonLine = text
+		.split("\n")
+		.map((l) => l.replace(/^data:\s*/, "").trim())
+		.find((l) => l.startsWith("{"));
+	if (jsonLine) {
+		parsed = JSON.parse(jsonLine);
+	} else {
+		parsed = JSON.parse(text);
+	}
+
+	return parsed as { result: { content: Array<{ text: string }> } };
+}
+
+describe("subtask bidirectional navigation", () => {
+	let env: TestEnv;
+	beforeAll(async () => {
+		env = await startTestEnv();
+	});
+	afterAll(async () => {
+		await env.server.stop();
+		await cleanup(env.projectDir, env.configDir);
+	});
+
+	test("parent task file lists subtask ID in subtasks frontmatter after subtask creation", async () => {
+		// Create parent task
+		const parentRes = await mcpCall(env, "task_create", { title: "Parent Task" });
+		const parentText: string = parentRes.result.content[0]?.text ?? "";
+		const parentIdMatch = parentText.match(/task-\d+/i);
+		expect(parentIdMatch).not.toBeNull();
+		const parentId = parentIdMatch![0];
+
+		// Create subtask with parentTaskId
+		const subRes = await mcpCall(env, "task_create", { title: "Child Task", parentTaskId: parentId });
+		const subText: string = subRes.result.content[0]?.text ?? "";
+		const subIdMatch = subText.match(new RegExp(`${parentId}\\.\\d+`, "i"));
+		expect(subIdMatch).not.toBeNull();
+		const subId = subIdMatch![0].toLowerCase();
+
+		// Read the parent task file from disk and verify the subtasks frontmatter array contains the subtask ID.
+		// This validates bidirectional navigation at the file level, not just the dynamic view-time lookup.
+		const parentTaskDir = join(env.projectDir, "backlog", "tasks", parentId);
+		const dirListing = await $`ls ${parentTaskDir}`.quiet();
+		const parentFileName = dirListing.stdout.toString().trim().split("\n")[0] ?? "";
+		expect(parentFileName).toBeTruthy();
+		const parentFilePath = join(parentTaskDir, parentFileName);
+		const parentFileContent = await Bun.file(parentFilePath).text();
+		expect(parentFileContent.toLowerCase()).toContain(subId);
+	});
+});

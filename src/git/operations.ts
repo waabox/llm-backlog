@@ -269,7 +269,12 @@ export class GitOperations {
 		const lowerMessage = message.toLowerCase();
 		return networkErrorPatterns.some((pattern) => lowerMessage.includes(pattern));
 	}
-	async addAndCommitTaskFile(taskId: string, filePath: string, action: "create" | "update" | "archive"): Promise<void> {
+	async addAndCommitTaskFile(
+		taskId: string,
+		filePath: string,
+		action: "create" | "update" | "archive",
+		additionalFilePaths?: string[],
+	): Promise<void> {
 		const actionMessages = {
 			create: `Create task ${taskId}`,
 			update: `Update task ${taskId}`,
@@ -282,13 +287,22 @@ export class GitOperations {
 
 		// Retry git operations to handle transient failures
 		await this.retryGitOperation(async () => {
-			// Reset index to ensure only the specific file is staged
+			// Reset index to ensure only the intended files are staged
 			await this.resetIndex(repoRoot);
 
-			// Stage only the specific task file
+			// Stage the primary task file
 			await this.execGit(["add", pathForAdd], { cwd: repoRoot });
 
-			// Commit only the staged file
+			// Stage any additional files (e.g. the parent task file updated with subtask IDs)
+			if (additionalFilePaths && additionalFilePaths.length > 0) {
+				for (const extra of additionalFilePaths) {
+					const extraContext = await this.getPathContext(extra);
+					const extraPath = extraContext?.relativePath ?? relative(this.projectRoot, extra).replace(/\\/g, "/");
+					await this.execGit(["add", extraPath], { cwd: repoRoot });
+				}
+			}
+
+			// Commit all staged files
 			await this.commitStagedChanges(actionMessages[action], repoRoot);
 		}, `commit task file ${filePath}`);
 	}
