@@ -10,6 +10,7 @@ export interface SyncResult {
 	tasks: number;
 	drafts: number;
 	completed: number;
+	skipped: Array<{ file: string; reason: string }>;
 }
 
 const ENTITY_PREFIXES: Record<string, string> = {
@@ -192,7 +193,7 @@ export class SqliteCoordinator {
 	 * Rebuild the entire index from markdown files. Idempotent.
 	 */
 	async sync(backlogDir: string): Promise<SyncResult> {
-		const result: SyncResult = { tasks: 0, drafts: 0, completed: 0 };
+		const result: SyncResult = { tasks: 0, drafts: 0, completed: 0, skipped: [] };
 
 		const filesToProcess: Array<{ filePath: string; entityType: string; counter: keyof SyncResult }> = [];
 
@@ -221,8 +222,11 @@ export class SqliteCoordinator {
 					const body = task.rawContent ?? "";
 					this.upsertTask(task, entityType, filePath, body);
 					result[counter]++;
-				} catch {
-					// skip malformed files
+				} catch (err) {
+					result.skipped.push({
+						file: filePath,
+						reason: err instanceof Error ? err.message : String(err),
+					});
 				}
 			}
 		});
