@@ -1,5 +1,5 @@
 import type { Core } from "../../core/backlog.ts";
-import { milestoneKey, resolveMilestoneInput } from "../../core/milestones.ts";
+import { resolveMilestoneInput } from "../../core/milestones.ts";
 import type { SearchPriorityFilter, SearchResultType, Task, TaskUpdateInput } from "../../types/index.ts";
 import { PREFIX_PATTERN, parseTaskIdSegments } from "../../utils/task-search.ts";
 
@@ -169,19 +169,6 @@ export async function handleSearch(req: Request, core: Core): Promise<Response> 
 		}
 
 		const results = searchService.search({ query, limit, types, filters });
-
-		const milestones = await core.fs.listMilestones();
-		const inactive = milestones.filter((m) => !m.active);
-		if (inactive.length > 0) {
-			const inactiveKeys = new Set(inactive.map((m) => milestoneKey(m.id)));
-			const filtered = results.filter((result) => {
-				if (result.type !== "task") return true;
-				const key = milestoneKey(result.task.milestone ?? "");
-				return !key || !inactiveKeys.has(key);
-			});
-			return Response.json(filtered);
-		}
-
 		return Response.json(results);
 	} catch (error) {
 		console.error("Error performing search:", error);

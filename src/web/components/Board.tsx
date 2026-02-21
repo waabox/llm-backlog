@@ -65,6 +65,19 @@ const Board: React.FC<BoardProps> = ({
     return tasks.filter(task => canonicalizeMilestone(task.milestone) === canonicalMilestoneFilter);
   }, [tasks, milestoneFilter, canonicalMilestoneFilter, milestoneAliasToCanonical]);
 
+  // In status-grouped mode with no explicit milestone filter, hide tasks from inactive milestones
+  const inactiveMilestoneKeys = useMemo(
+    () => new Set(milestoneEntities.filter((m) => !m.active).map((m) => milestoneKey(m.id))),
+    [milestoneEntities],
+  );
+  const visibleTasks = useMemo(() => {
+    if (laneMode !== "none" || milestoneFilter || inactiveMilestoneKeys.size === 0) return filteredTasks;
+    return filteredTasks.filter((task) => {
+      const key = milestoneKey(task.milestone ?? "");
+      return !key || !inactiveMilestoneKeys.has(key);
+    });
+  }, [filteredTasks, laneMode, milestoneFilter, inactiveMilestoneKeys]);
+
   // Handle highlighting a task (opening its edit popup)
   useEffect(() => {
     if (highlightTaskId && tasks.length > 0) {
@@ -145,17 +158,17 @@ const Board: React.FC<BoardProps> = ({
     });
   }, [tasks, archivedMilestoneIds, milestoneAliasToCanonical]);
 
-  // Use all tasks for lane grouping (for counts and visibility)
+  // Group visible tasks for display in columns
   const tasksByLane = useMemo(
-    () => groupTasksByLaneAndStatus(laneMode, lanes, statuses, tasks, {
+    () => groupTasksByLaneAndStatus(laneMode, lanes, statuses, visibleTasks, {
       archivedMilestoneIds,
       milestoneEntities,
       archivedMilestones,
     }),
-    [laneMode, lanes, statuses, tasks, archivedMilestoneIds, milestoneEntities, archivedMilestones]
+    [laneMode, lanes, statuses, visibleTasks, archivedMilestoneIds, milestoneEntities, archivedMilestones]
   );
 
-  // Separate grouping for filtered display in columns
+  // Separate grouping for filtered display when a specific milestone is selected
   const filteredTasksByLane = useMemo(
     () =>
       groupTasksByLaneAndStatus(laneMode, lanes, statuses, filteredTasks, {
