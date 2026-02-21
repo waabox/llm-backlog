@@ -10,8 +10,8 @@ import {
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Core } from "../core/backlog.ts";
-import { FileSystem } from "../file-system/operations.ts";
-import { GitOperations } from "../git/operations.ts";
+import type { FileSystem } from "../file-system/operations.ts";
+import type { GitOperations } from "../git/operations.ts";
 import { getPackageName } from "../utils/app-info.ts";
 import { getVersion } from "../utils/version.ts";
 import { registerInitRequiredResource } from "./resources/init-required/index.ts";
@@ -67,7 +67,11 @@ export class McpServer extends Core {
 		instructions: string,
 		options?: { filesystem?: FileSystem; gitOperations?: GitOperations },
 	) {
-		super(projectRoot, { enableWatchers: true, filesystem: options?.filesystem, gitOperations: options?.gitOperations });
+		super(projectRoot, {
+			enableWatchers: true,
+			filesystem: options?.filesystem,
+			gitOperations: options?.gitOperations,
+		});
 
 		this.server = new Server(
 			{
@@ -310,7 +314,10 @@ export async function createMcpServer(projectRoot: string, options: ServerInitOp
 
 	// Create server with appropriate instructions
 	const instructions = config ? INSTRUCTIONS_NORMAL : INSTRUCTIONS_FALLBACK;
-	const server = new McpServer(projectRoot, instructions, { filesystem: options.filesystem, gitOperations: options.gitOperations });
+	const server = new McpServer(projectRoot, instructions, {
+		filesystem: options.filesystem,
+		gitOperations: options.gitOperations,
+	});
 
 	// Graceful fallback: if config doesn't exist, provide init-required resource
 	if (!config) {

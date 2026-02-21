@@ -46,8 +46,7 @@ export function registerTaskTools(server: McpServer, config: BacklogConfig): voi
 	const editTaskTool: McpToolHandler = createSimpleValidatedTool(
 		{
 			name: "task_edit",
-			description:
-				"Edit a Backlog.md task, including metadata, implementation plan, final summary, and dependencies",
+			description: "Edit a Backlog.md task, including metadata, implementation plan, final summary, and dependencies",
 			inputSchema: taskEditSchema,
 		},
 		taskEditSchema,
@@ -116,7 +115,8 @@ export function createMoveTaskTool(server: McpServer, currentUser: string): McpT
 			},
 		},
 		{ properties: { id: { type: "string" }, status: { type: "string" } }, required: ["id", "status"] },
-		async (input) => handlers.moveTask({ id: input.id as string, status: input.status as string, assignee: currentUser }),
+		async (input) =>
+			handlers.moveTask({ id: input.id as string, status: input.status as string, assignee: currentUser }),
 	);
 }
 

@@ -180,19 +180,14 @@ interface ResolvedTaskFile {
 	file: string;
 }
 
-async function resolveTaskFile(
-	taskId: string,
-	tasksDir: string,
-): Promise<ResolvedTaskFile | null> {
+async function resolveTaskFile(taskId: string, tasksDir: string): Promise<ResolvedTaskFile | null> {
 	const detectedPrefix = extractAnyPrefix(taskId);
 
 	if (detectedPrefix) {
 		const containerDir = getTaskContainerDir(taskId, tasksDir);
 		const globPattern = buildGlobPattern(detectedPrefix);
 		try {
-			const files = await Array.fromAsync(
-				new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }),
-			);
+			const files = await Array.fromAsync(new Bun.Glob(globPattern).scan({ cwd: containerDir, followSymlinks: true }));
 			const file = findMatchingFile(files, taskId, detectedPrefix);
 			if (file) return { containerDir, file };
 		} catch {
@@ -203,15 +198,11 @@ async function resolveTaskFile(
 
 	// Numeric-only ID fallback: scan subdirectories
 	try {
-		const allDirs = await Array.fromAsync(
-			new Bun.Glob("*/").scan({ cwd: tasksDir, followSymlinks: true }),
-		);
+		const allDirs = await Array.fromAsync(new Bun.Glob("*/").scan({ cwd: tasksDir, followSymlinks: true }));
 		const numericPart = taskId.trim();
 		for (const dir of allDirs) {
 			const dirPath = join(tasksDir, dir);
-			const filesInDir = await Array.fromAsync(
-				new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }),
-			);
+			const filesInDir = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: dirPath, followSymlinks: true }));
 			for (const file of filesInDir) {
 				const filePrefix = extractAnyPrefix(file);
 				if (filePrefix) {

@@ -1,6 +1,6 @@
-import type { BacklogConfig } from "../../types/index.ts";
 import type { Core } from "../../core/backlog.ts";
 import { getTaskStatistics } from "../../core/statistics.ts";
+import type { BacklogConfig } from "../../types/index.ts";
 import { getVersion } from "../../utils/version.ts";
 
 export async function handleGetStatuses(core: Core): Promise<Response> {

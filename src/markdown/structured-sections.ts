@@ -19,11 +19,7 @@ const SECTION_CONFIG: Record<StructuredSectionKey, SectionConfig> = {
 	finalSummary: { title: "Final Summary", markerId: "FINAL_SUMMARY" },
 };
 
-const SECTION_INSERTION_ORDER: StructuredSectionKey[] = [
-	"description",
-	"implementationPlan",
-	"finalSummary",
-];
+const SECTION_INSERTION_ORDER: StructuredSectionKey[] = ["description", "implementationPlan", "finalSummary"];
 
 const KNOWN_SECTION_TITLES = new Set<string>([...getStructuredSectionTitles()]);
 
@@ -232,7 +228,7 @@ export function updateStructuredSections(content: string, sections: StructuredSe
 
 	if (plan) {
 		const planBlock = buildSectionBlock("implementationPlan", plan);
-		let res = insertAfterSection(tail, getConfig("description").title, planBlock);
+		const res = insertAfterSection(tail, getConfig("description").title, planBlock);
 		if (!res.inserted) {
 			tail = insertAtStart(tail, planBlock);
 		} else {
@@ -242,7 +238,7 @@ export function updateStructuredSections(content: string, sections: StructuredSe
 
 	if (finalSummary) {
 		const finalBlock = buildSectionBlock("finalSummary", finalSummary);
-		let res = insertAfterSection(tail, getConfig("implementationPlan").title, finalBlock);
+		const res = insertAfterSection(tail, getConfig("implementationPlan").title, finalBlock);
 		if (!res.inserted) {
 			tail = appendBlock(tail, finalBlock);
 		} else {

@@ -17,11 +17,11 @@ import { handleDeleteAsset, handleListAssets, handleUploadAsset } from "./routes
 import { handleGetMe, handleGoogleLogin } from "./routes/auth.ts";
 import {
 	handleGetConfig,
-	handleUpdateConfig,
 	handleGetStatistics,
 	handleGetStatus,
 	handleGetStatuses,
 	handleGetVersion,
+	handleUpdateConfig,
 } from "./routes/config.ts";
 import {
 	handleCreateDecision,

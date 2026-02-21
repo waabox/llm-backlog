@@ -23,8 +23,8 @@ import {
 	ListToolsRequestSchema,
 	ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { FileSystem } from "../file-system/operations.ts";
-import { GitOperations } from "../git/operations.ts";
+import type { FileSystem } from "../file-system/operations.ts";
+import type { GitOperations } from "../git/operations.ts";
 import { extractBearerToken } from "../server/auth/middleware.ts";
 import type { AuthUser } from "../server/auth/users-store.ts";
 import { getPackageName } from "../utils/app-info.ts";
@@ -90,8 +90,7 @@ export async function createMcpRequestHandler(options: McpRequestHandlerOptions)
 		let authenticatedUser: AuthUser | undefined;
 		if (authEnabled) {
 			const url = new URL(req.url);
-			const token =
-				extractBearerToken(req.headers.get("Authorization")) ?? url.searchParams.get("token");
+			const token = extractBearerToken(req.headers.get("Authorization")) ?? url.searchParams.get("token");
 			if (!token || !findUserByApiKey) {
 				return Response.json({ error: "Unauthorized" }, { status: 401 });
 			}

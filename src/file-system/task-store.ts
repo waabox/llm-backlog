@@ -4,7 +4,13 @@ import { parseTask } from "../markdown/parser.ts";
 import { serializeTask } from "../markdown/serializer.ts";
 import type { BacklogConfig, Task, TaskListFilter } from "../types/index.ts";
 import { buildGlobPattern, extractAnyPrefix, idForFilename, normalizeId } from "../utils/prefix-config.ts";
-import { getTaskContainerDir, getTaskFilename, getTaskPath, isSubtaskId, normalizeTaskIdentity } from "../utils/task-path.ts";
+import {
+	getTaskContainerDir,
+	getTaskFilename,
+	getTaskPath,
+	isSubtaskId,
+	normalizeTaskIdentity,
+} from "../utils/task-path.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { ensureDirectoryExists, sanitizeFilename } from "./shared.ts";
 
