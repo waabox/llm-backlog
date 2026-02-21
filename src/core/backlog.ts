@@ -414,7 +414,11 @@ export class Core {
 		return renameMilestone(this, identifier, title, autoCommit);
 	}
 
-	async setMilestoneActive(identifier: string, active: boolean, autoCommit?: boolean): Promise<{ success: boolean; milestone?: Milestone }> {
+	async setMilestoneActive(
+		identifier: string,
+		active: boolean,
+		autoCommit?: boolean,
+	): Promise<{ success: boolean; milestone?: Milestone }> {
 		return setMilestoneActive(this, identifier, active, autoCommit);
 	}
 

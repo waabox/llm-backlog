@@ -66,7 +66,9 @@ describe("buildMilestoneBuckets", () => {
 			makeTask({ id: "task-2", milestone: "m-2", status: "Done" }),
 		];
 		const milestones: Milestone[] = [{ id: "m-2", title: "Release 1", description: "", active: true, rawContent: "" }];
-		const archivedMilestones: Milestone[] = [{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" }];
+		const archivedMilestones: Milestone[] = [
+			{ id: "m-1", title: "Release 1", description: "", active: true, rawContent: "" },
+		];
 
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"], {
 			archivedMilestoneIds: ["m-1"],
@@ -97,7 +99,9 @@ describe("buildMilestoneBuckets", () => {
 	it("keeps active-title aliases when an archived milestone ID shares the same key", () => {
 		const tasks = [makeTask({ id: "task-1", milestone: "m-0", status: "To Do" })];
 		const milestones: Milestone[] = [{ id: "m-2", title: "m-0", description: "", active: true, rawContent: "" }];
-		const archivedMilestones: Milestone[] = [{ id: "m-0", title: "Historical", description: "", active: true, rawContent: "" }];
+		const archivedMilestones: Milestone[] = [
+			{ id: "m-0", title: "Historical", description: "", active: true, rawContent: "" },
+		];
 		const buckets = buildMilestoneBuckets(tasks, milestones, ["To Do", "Done"], {
 			archivedMilestones,
 			archivedMilestoneIds: ["m-0"],

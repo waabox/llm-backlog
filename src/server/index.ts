@@ -36,10 +36,10 @@ import { handleInit } from "./routes/init.ts";
 import {
 	handleArchiveMilestone,
 	handleCreateMilestone,
-	handleSetMilestoneActive,
 	handleGetMilestone,
 	handleListArchivedMilestones,
 	handleListMilestones,
+	handleSetMilestoneActive,
 } from "./routes/milestones.ts";
 import { handleGetSequences, handleMoveSequence } from "./routes/sequences.ts";
 import {

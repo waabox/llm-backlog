@@ -15,10 +15,6 @@ export class StorageCoordinator extends FileSystem {
 	private sqlite: SqliteCoordinator | null = null;
 	private syncDone = false;
 
-	constructor(projectRoot: string) {
-		super(projectRoot);
-	}
-
 	/**
 	 * Returns the SQLite coordinator, creating it on first access.
 	 * The backlog/ directory must exist before calling this.

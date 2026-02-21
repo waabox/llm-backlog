@@ -232,7 +232,10 @@ ${description || `Milestone: ${title}`}`,
 		}
 	}
 
-	async updateMilestoneActive(identifier: string, active: boolean): Promise<{ success: boolean; milestone?: Milestone }> {
+	async updateMilestoneActive(
+		identifier: string,
+		active: boolean,
+	): Promise<{ success: boolean; milestone?: Milestone }> {
 		const normalized = identifier.trim();
 		if (!normalized) {
 			return { success: false };
@@ -245,7 +248,12 @@ ${description || `Milestone: ${title}`}`,
 			}
 
 			const { milestone, filepath } = milestoneMatch;
-			const updatedContent = this.serializeMilestoneContent(milestone.id, milestone.title, milestone.rawContent, active);
+			const updatedContent = this.serializeMilestoneContent(
+				milestone.id,
+				milestone.title,
+				milestone.rawContent,
+				active,
+			);
 			await Bun.write(filepath, updatedContent);
 
 			return { success: true, milestone: parseMilestone(updatedContent) };

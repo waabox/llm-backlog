@@ -392,7 +392,8 @@ export class TaskHandlers {
 		}
 
 		return await formatTaskCallResult(task, [`Completed task ${task.id}.`], {
-			filePathOverride: completedFilePath, compact: true,
+			filePathOverride: completedFilePath,
+			compact: true,
 		});
 	}
 
