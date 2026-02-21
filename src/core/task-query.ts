@@ -3,6 +3,7 @@ import type { SearchFilters, Task, TaskListFilter } from "../types/index.ts";
 import { getTaskPath, normalizeTaskId, taskIdsEqual } from "../utils/task-path.ts";
 import { attachSubtaskSummaries } from "../utils/task-subtasks.ts";
 import type { Core } from "./backlog.ts";
+import { milestoneKey } from "./milestones.ts";
 import {
 	type BranchTaskStateEntry,
 	findTaskInLocalBranches,
@@ -13,7 +14,6 @@ import {
 	resolveTaskConflict,
 } from "./task-loader.ts";
 import { applyTaskFilters, filterLocalEditableTasks } from "./task-mutation.ts";
-import { milestoneKey } from "./milestones.ts";
 
 export interface TaskQueryOptions {
 	filters?: TaskListFilter;
